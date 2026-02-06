@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 语音助手测试脚本
 

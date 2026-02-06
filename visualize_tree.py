@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 行为树可视化脚本
 

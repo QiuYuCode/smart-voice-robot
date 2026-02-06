@@ -25,6 +25,8 @@ try:
 except:
     pass
 
+MIC_LOCK = threading.Lock()
+
 
 # ============================================================================
 # 1. 唤醒词检测节点
@@ -59,6 +61,8 @@ class WakeWordDetector(py_trees.behaviour.Behaviour):
         self.logger.info("[待机] 聆听唤醒词...")
         
         try:
+            if not MIC_LOCK.acquire(blocking=False):
+                return py_trees.common.Status.RUNNING
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.2)
                 audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=5)
@@ -76,13 +80,14 @@ class WakeWordDetector(py_trees.behaviour.Behaviour):
                 text = result_dict.get("text", "")
 
             text = text.replace(" ", "")
-            
+
             if text and any(wake in text for wake in ["你好助手", "小助手", "助手"]):
                 self.logger.info(f"✅ 检测到唤醒词: '{text}'")
                 self.blackboard.wake_word_detected = True
                 self.blackboard.state = "active"
                 return py_trees.common.Status.SUCCESS
-            
+            else:
+                self.logger.info(f"❌ 未检测到唤醒词: '{text}'")
             return py_trees.common.Status.RUNNING
 
         except sr.WaitTimeoutError:
@@ -90,6 +95,9 @@ class WakeWordDetector(py_trees.behaviour.Behaviour):
         except Exception as e:
             self.logger.error(f"唤醒词检测出错: {e}")
             return py_trees.common.Status.RUNNING
+        finally:
+            if MIC_LOCK.locked():
+                MIC_LOCK.release()
 
 
 # ============================================================================
@@ -136,6 +144,8 @@ class InterruptMonitor(py_trees.behaviour.Behaviour):
 
         # 快速检测打断词
         try:
+            if not MIC_LOCK.acquire(blocking=False):
+                return py_trees.common.Status.RUNNING
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.1)
                 audio = self.recognizer.listen(source, timeout=0.5, phrase_time_limit=3)
@@ -167,6 +177,9 @@ class InterruptMonitor(py_trees.behaviour.Behaviour):
         except Exception as e:
             # 静默失败，不阻塞主流程
             return py_trees.common.Status.RUNNING
+        finally:
+            if MIC_LOCK.locked():
+                MIC_LOCK.release()
 
 
 # ============================================================================
@@ -178,6 +191,7 @@ class PlayWakeupSound(py_trees.behaviour.Behaviour):
         super(PlayWakeupSound, self).__init__(name)
         self.tts_engine = None
         self.is_speaking = False
+        self.thread = None
 
     def setup(self):
         try:
@@ -190,19 +204,32 @@ class PlayWakeupSound(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         self.is_speaking = True
+        self.thread = None
 
     def update(self):
         if not self.tts_engine:
             return py_trees.common.Status.FAILURE
-        
-        if self.is_speaking:
+
+        if self.is_speaking and self.thread is None:
             self.logger.info("🔊 [播报] 我在，请说")
-            self.tts_engine.say("我在，请说")
-            self.tts_engine.runAndWait()
+            self.thread = threading.Thread(
+                target=self._speak,
+                args=("我在，请说",),
+                daemon=True
+            )
+            self.thread.start()
+            return py_trees.common.Status.RUNNING
+
+        if self.thread and not self.thread.is_alive():
             self.is_speaking = False
+            self.thread = None
             return py_trees.common.Status.SUCCESS
-        
-        return py_trees.common.Status.SUCCESS
+
+        return py_trees.common.Status.RUNNING
+
+    def _speak(self, text):
+        self.tts_engine.say(text)
+        self.tts_engine.runAndWait()
 
 
 class PlayResponseSound(py_trees.behaviour.Behaviour):
@@ -211,6 +238,7 @@ class PlayResponseSound(py_trees.behaviour.Behaviour):
         super(PlayResponseSound, self).__init__(name)
         self.tts_engine = None
         self.is_speaking = False
+        self.thread = None
         self.blackboard = py_trees.blackboard.Client(name="ResponseClient", namespace="dialog")
         self.blackboard.register_key(key="response_text", access=py_trees.common.Access.READ)
         self.blackboard.register_key(key="interrupt_command", access=py_trees.common.Access.READ)
@@ -226,6 +254,7 @@ class PlayResponseSound(py_trees.behaviour.Behaviour):
 
     def initialise(self):
         self.is_speaking = True
+        self.thread = None
 
     def update(self):
         # 检查是否被打断
@@ -238,25 +267,38 @@ class PlayResponseSound(py_trees.behaviour.Behaviour):
 
         if not self.tts_engine:
             return py_trees.common.Status.FAILURE
-        
-        if self.is_speaking:
+
+        if self.is_speaking and self.thread is None:
             try:
                 response = self.blackboard.response_text
             except (KeyError, AttributeError):
                 response = "操作完成"
             
             self.logger.info(f"🔊 [播报] {response}")
-            self.tts_engine.say(response)
-            self.tts_engine.runAndWait()
+            self.thread = threading.Thread(
+                target=self._speak,
+                args=(response,),
+                daemon=True
+            )
+            self.thread.start()
+            return py_trees.common.Status.RUNNING
+
+        if self.thread and not self.thread.is_alive():
             self.is_speaking = False
+            self.thread = None
             return py_trees.common.Status.SUCCESS
-        
-        return py_trees.common.Status.SUCCESS
+
+        return py_trees.common.Status.RUNNING
+
+    def _speak(self, text):
+        self.tts_engine.say(text)
+        self.tts_engine.runAndWait()
 
     def terminate(self, new_status):
         # 如果被打断，停止 TTS
         if self.tts_engine and self.is_speaking:
             self.tts_engine.stop()
+        self.thread = None
 
 
 # ============================================================================
@@ -298,9 +340,11 @@ class ListenForCommand(py_trees.behaviour.Behaviour):
         self.logger.info("👂 [监听] 等待指令...")
         
         try:
+            if not MIC_LOCK.acquire(blocking=False):
+                return py_trees.common.Status.RUNNING
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.2)
-                audio = self.recognizer.listen(source, timeout=10, phrase_time_limit=10)
+                audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=6)
 
             raw_data = audio.get_raw_data()
             rec = vosk.KaldiRecognizer(self.vosk_model, source.SAMPLE_RATE)
@@ -325,11 +369,13 @@ class ListenForCommand(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
 
         except sr.WaitTimeoutError:
-            self.logger.warning("监听超时，无语音输入")
-            return py_trees.common.Status.FAILURE
+            return py_trees.common.Status.RUNNING
         except Exception as e:
             self.logger.error(f"指令监听出错: {e}")
             return py_trees.common.Status.FAILURE
+        finally:
+            if MIC_LOCK.locked():
+                MIC_LOCK.release()
 
 
 # ============================================================================
@@ -506,6 +552,29 @@ class UnknownCommandResponse(py_trees.behaviour.Behaviour):
         return py_trees.common.Status.SUCCESS
 
 
+class StopAction(py_trees.behaviour.Behaviour):
+    """停止/退出动作"""
+    def __init__(self, name="StopAction"):
+        super(StopAction, self).__init__(name)
+        self.blackboard = py_trees.blackboard.Client(name="StopClient", namespace="dialog")
+        self.blackboard.register_key(key="intent", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="response_text", access=py_trees.common.Access.WRITE)
+        self.blackboard.register_key(key="state", access=py_trees.common.Access.WRITE)
+
+    def update(self):
+        try:
+            intent = self.blackboard.intent
+            if intent != "stop":
+                return py_trees.common.Status.FAILURE
+        except (KeyError, AttributeError):
+            return py_trees.common.Status.FAILURE
+
+        self.logger.info("🛑 [执行] 停止并回到待机")
+        self.blackboard.response_text = "已进入待机状态"
+        self.blackboard.state = "idle"
+        return py_trees.common.Status.SUCCESS
+
+
 # ============================================================================
 # 7. 超时检查节点
 # ============================================================================
@@ -515,7 +584,7 @@ class CheckDialogTimeout(py_trees.behaviour.Behaviour):
         super(CheckDialogTimeout, self).__init__(name)
         self.timeout_seconds = timeout_seconds
         self.blackboard = py_trees.blackboard.Client(name="TimeoutClient", namespace="dialog")
-        self.blackboard.register_key(key="last_activity_time", access=py_trees.common.Access.READ)
+        self.blackboard.register_key(key="last_activity_time", access=py_trees.common.Access.WRITE)
         self.blackboard.register_key(key="state", access=py_trees.common.Access.WRITE)
 
     def update(self):
@@ -560,20 +629,54 @@ class ResetDialogState(py_trees.behaviour.Behaviour):
         return py_trees.common.Status.SUCCESS
 
 
+class CheckDialogState(py_trees.behaviour.Behaviour):
+    """根据黑板状态决定是否运行分支"""
+    def __init__(self, target_state, name="CheckDialogState"):
+        super(CheckDialogState, self).__init__(name)
+        self.target_state = target_state
+        self.blackboard = py_trees.blackboard.Client(name="StateClient", namespace="dialog")
+        self.blackboard.register_key(key="state", access=py_trees.common.Access.READ)
+
+    def update(self):
+        try:
+            current = self.blackboard.state
+        except (KeyError, AttributeError):
+            current = "idle"
+        return (
+            py_trees.common.Status.SUCCESS
+            if current == self.target_state
+            else py_trees.common.Status.FAILURE
+        )
+
+
 # ============================================================================
 # 9. 组装行为树
 # ============================================================================
 def create_tree():
     """创建完整的语音交互行为树"""
     
+    init_bb = py_trees.blackboard.Client(name="TreeInit", namespace="dialog")
+    init_bb.register_key(key="state", access=py_trees.common.Access.WRITE)
+    try:
+        _ = init_bb.state
+    except (KeyError, AttributeError):
+        init_bb.state = "idle"
+
     # Root: Selector (在待机和激活状态之间切换)
     root = py_trees.composites.Selector(
         name="语音助手根节点",
-        memory=True
+        memory=False
     )
 
     # ---- 待机状态分支 ----
-    idle_state = WakeWordDetector()
+    idle_sequence = py_trees.composites.Sequence(
+        name="待机分支",
+        memory=False
+    )
+    idle_sequence.add_children([
+        CheckDialogState(target_state="idle", name="检查待机状态"),
+        WakeWordDetector()
+    ])
 
     # ---- 激活状态分支 ----
     # 使用 Parallel 实现打断功能
@@ -605,6 +708,7 @@ def create_tree():
         OpenCameraAction(),
         QueryWeatherAction(),
         PlayMusicAction(),
+        StopAction(),
         UnknownCommandResponse()
     ])
 
@@ -630,20 +734,20 @@ def create_tree():
     # 重置状态节点（当激活状态结束时）
     reset_state = ResetDialogState()
 
-    # 激活状态序列
-    active_sequence = py_trees.composites.Sequence(
-        name="激活状态序列",
+    active_guarded = py_trees.composites.Sequence(
+        name="激活分支",
         memory=False
     )
-    active_sequence.add_children([
+    active_guarded.add_children([
+        CheckDialogState(target_state="active", name="检查激活状态"),
         active_parallel,
         reset_state
     ])
 
     # 组装根节点
     root.add_children([
-        idle_state,
-        active_sequence
+        active_guarded,
+        idle_sequence
     ])
 
     return root
@@ -653,7 +757,7 @@ def create_tree():
 # 10. 主程序
 # ============================================================================
 if __name__ == "__main__":
-    log_tree.Level = log_tree.Level.INFO
+    log_tree.Level = log_tree.Level.DEBUG
     
     print("=" * 60)
     print("🤖 语音助手系统启动中...")

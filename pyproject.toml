@@ -5,6 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "langchain-core",
+    "langchain-ollama",
+    "numpy",
     "ollama>=0.6.1",
     "opencv-python>=4.13.0.90",
     "py-trees>=2.4.0",
@@ -12,7 +15,6 @@ dependencies = [
     "sherpa-onnx>=1.12.23",
     "sherpa-onnx-bin>=1.12.23",
     "sounddevice>=0.5.5",
-    "speechrecognition>=3.14.5",
 ]
 
 [[tool.uv.index]]

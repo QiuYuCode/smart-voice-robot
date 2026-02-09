@@ -245,3 +245,4 @@ AMENT_IGNORE
 .CLAUDE.md
 .cursor.md
 .claude/
+.cursor/

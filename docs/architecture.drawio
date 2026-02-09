@@ -1,0 +1,434 @@
+<mxfile host="app.diagrams.net" modified="2026-02-09T00:00:00.000Z" agent="manual" version="24.0.0" type="device">
+  <diagram id="voice-assistant-architecture" name="系统架构">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;机器人语音助手 — 系统架构图&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="520" y="20" width="360" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ========== 硬件层 ========== -->
+        <mxCell id="hw_group" value="硬件层" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=14;fontStyle=1;verticalAlign=top;spacingTop=5;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="280" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="mic" value="🎤 麦克风&#xa;(sounddevice)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="speaker" value="🔊 扬声器&#xa;(sounddevice)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="210" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="camera" value="📷 相机&#xa;(OpenCV)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="120" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="robot_hw" value="🤖 机械臂 / ROS&#xa;(预留接口)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="200" y="210" width="100" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ========== 语音引擎层 ========== -->
+        <mxCell id="engine_group" value="语音引擎 (VoiceEngine)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#333333;fontSize=14;fontStyle=1;verticalAlign=top;spacingTop=5;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
+          <mxGeometry x="380" y="80" width="460" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="audio_queue" value="dialog_audio_queue&#xa;(音频队列)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="120" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="kws_model" value="KWS 模型&#xa;(sherpa-onnx)&#xa;唤醒词检测" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="550" y="110" width="120" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="asr_model" value="ASR 模型&#xa;(sherpa-onnx)&#xa;流式语音识别" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="690" y="110" width="120" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="tts_model" value="TTS 模型&#xa;(VITS aishell3)&#xa;语音合成" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="550" y="200" width="120" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="audio_cb" value="audio_callback()&#xa;麦克风回调" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="210" width="120" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- ========== 行为树层 ========== -->
+        <mxCell id="bt_group" value="行为树 (py_trees BehaviourTree)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;fontSize=14;fontStyle=1;verticalAlign=top;spacingTop=5;dashed=1;dashPattern=5 5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="1200" height="320" as="geometry" />
+        </mxCell>
+
+        <!-- Root Sequence -->
+        <mxCell id="root" value="Root&#xa;(Sequence ✓)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="360" width="130" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- WakeWord -->
+        <mxCell id="wakeword" value="WaitForWakeWord&#xa;KWS 唤醒词" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="440" width="130" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- WakeupResponse -->
+        <mxCell id="wakeup_resp" value="WakeupResponse&#xa;&quot;我在，请说&quot;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="260" y="440" width="130" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- DialogRepeat -->
+        <mxCell id="dialog_repeat" value="DialogRepeat&#xa;(SuccessIsRunning ↻)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="440" width="150" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- DialogLoop -->
+        <mxCell id="dialog_loop" value="DialogLoop&#xa;(Sequence →)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="520" width="130" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Listen -->
+        <mxCell id="listen" value="ListenCommand&#xa;流式 ASR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="200" y="600" width="110" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Intent -->
+        <mxCell id="intent" value="RecognizeIntent&#xa;关键词匹配" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="370" y="600" width="110" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ActionSelector -->
+        <mxCell id="action_sel" value="ActionSelector&#xa;(Selector ?)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="600" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Actions -->
+        <mxCell id="act_camera" value="OpenCamera" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="540" y="680" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="act_arm" value="RobotArm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="630" y="680" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="act_nav" value="Navigation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="720" y="680" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="act_llm" value="LLMDialog" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="810" y="680" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="act_default" value="Default" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="900" y="680" width="80" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Speak -->
+        <mxCell id="speak" value="SpeakResponse&#xa;TTS 播放" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="880" y="600" width="110" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ========== Blackboard ========== -->
+        <mxCell id="bb" value="Blackboard (共享数据)&#xa;────────────────&#xa;dialog/user_command&#xa;dialog/intent&#xa;dialog/response_text&#xa;dialog/is_speaking&#xa;dialog/last_activity_time" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#f0f0f0;strokeColor=#666666;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="900" y="80" width="210" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- ========== LLM 服务 ========== -->
+        <mxCell id="llm_service" value="Ollama LLM 服务&#xa;(deepseek-r1:8b)&#xa;langchain-ollama" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="80" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- ========== 连接线 ========== -->
+        <!-- 麦克风 -> 音频队列 -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="mic" target="audio_queue" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1_label" value="PCM float32" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#666666;" vertex="1" connectable="0" parent="e1">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- TTS -> 扬声器 -->
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#9673a6;strokeWidth=2;" edge="1" source="tts_model" target="speaker" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 回调 -> 队列 -->
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d6b656;strokeWidth=1;dashed=1;" edge="1" source="audio_cb" target="audio_queue" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Root -> children -->
+        <mxCell id="e4" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="root" target="wakeword" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="root" target="wakeup_resp" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="root" target="dialog_repeat" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- DialogRepeat -> DialogLoop -->
+        <mxCell id="e7" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="dialog_repeat" target="dialog_loop" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- DialogLoop -> children -->
+        <mxCell id="e8" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="dialog_loop" target="listen" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="dialog_loop" target="intent" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="dialog_loop" target="action_sel" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="dialog_loop" target="speak" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ActionSelector -> Actions -->
+        <mxCell id="e12" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="action_sel" target="act_camera" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="action_sel" target="act_arm" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="action_sel" target="act_nav" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="action_sel" target="act_llm" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="action_sel" target="act_default" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Blackboard connections -->
+        <mxCell id="e17" style="rounded=1;strokeColor=#666666;strokeWidth=1;dashed=1;dashPattern=3 3;" edge="1" source="bb" target="dialog_loop" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17_label" value="read/write" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#999999;" vertex="1" connectable="0" parent="e17">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- LLM connection -->
+        <mxCell id="e18" style="rounded=1;strokeColor=#9673a6;strokeWidth=2;dashed=1;" edge="1" source="act_llm" target="llm_service" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_label" value="HTTP API" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#666666;" vertex="1" connectable="0" parent="e18">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="&lt;b&gt;图例&lt;/b&gt;&#xa;🟢 Composite 控制节点&#xa;🔴 Leaf 行为节点&#xa;🟡 Action 动作节点&#xa;🟣 AI/ML 模型&#xa;🔵 硬件设备" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=#666666;fillColor=#f5f5f5;fontSize=11;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="220" width="140" height="120" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="behavior-tree-detail" name="行为树详细结构">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="bt_title" value="&lt;b&gt;行为树节点详细结构&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;" vertex="1" parent="1">
+          <mxGeometry x="560" y="20" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Root -->
+        <mxCell id="bt_root" value="⟶ Root&lt;br&gt;&lt;i&gt;Sequence(memory=True)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="560" y="80" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Level 1 children -->
+        <mxCell id="bt_wake" value="🎤 WaitForWakeWord&lt;br&gt;&lt;i&gt;持续监听 KWS&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;RUNNING → SUCCESS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="200" width="180" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="bt_wakeup_sound" value="🔊 WakeupResponse&lt;br&gt;&lt;i&gt;播放 &quot;我在，请说&quot;&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;阻塞式 → SUCCESS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="200" width="180" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="bt_repeat" value="↻ DialogRepeat&lt;br&gt;&lt;i&gt;SuccessIsRunning&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;SUCCESS→RUNNING (无限循环)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="200" width="230" height="65" as="geometry" />
+        </mxCell>
+
+        <!-- DialogLoop -->
+        <mxCell id="bt_dialog" value="⟶ DialogLoop&lt;br&gt;&lt;i&gt;Sequence(memory=False)&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;每轮完成后自动重置&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="340" width="230" height="65" as="geometry" />
+        </mxCell>
+
+        <!-- DialogLoop children -->
+        <mxCell id="bt_listen" value="🎤 ListenCommand&lt;br&gt;&lt;i&gt;流式 ASR 识别&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;→ bb.user_command&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="480" width="170" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="bt_intent" value="🧠 RecognizeIntent&lt;br&gt;&lt;i&gt;关键词匹配&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;→ bb.intent&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="480" width="170" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="bt_selector" value="? ActionSelector&lt;br&gt;&lt;i&gt;Selector(memory=False)&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;按优先级尝试&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="480" width="180" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="bt_speak" value="🔊 SpeakResponse&lt;br&gt;&lt;i&gt;TTS 语音播放&lt;/i&gt;&lt;br&gt;&lt;font color='#999'&gt;← bb.response_text&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="950" y="480" width="170" height="65" as="geometry" />
+        </mxCell>
+
+        <!-- Action nodes -->
+        <mxCell id="bt_a1" value="📷 OpenCamera&lt;br&gt;&lt;font color='#999' style='font-size:9px'&gt;intent==open_camera&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="620" width="120" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="bt_a2" value="🦾 RobotArm&lt;br&gt;&lt;font color='#999' style='font-size:9px'&gt;intent==robot_arm&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="570" y="620" width="120" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="bt_a3" value="🗺️ Navigation&lt;br&gt;&lt;font color='#999' style='font-size:9px'&gt;intent==navigation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="620" width="120" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="bt_a4" value="💬 LLMDialog&lt;br&gt;&lt;font color='#999' style='font-size:9px'&gt;intent==chat&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="830" y="620" width="120" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="bt_a5" value="🔄 Default&lt;br&gt;&lt;font color='#999' style='font-size:9px'&gt;兜底 (always SUCCESS)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="960" y="620" width="120" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="be1" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="bt_root" target="bt_wake" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be1l" value="①" style="edgeLabel;html=1;fontSize=10;fontStyle=1;fontColor=#82b366;" vertex="1" connectable="0" parent="be1"><mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="be2" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="bt_root" target="bt_wakeup_sound" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be2l" value="②" style="edgeLabel;html=1;fontSize=10;fontStyle=1;fontColor=#82b366;" vertex="1" connectable="0" parent="be2"><mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="be3" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="bt_root" target="bt_repeat" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be3l" value="③" style="edgeLabel;html=1;fontSize=10;fontStyle=1;fontColor=#82b366;" vertex="1" connectable="0" parent="be3"><mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="be4" style="rounded=1;strokeColor=#82b366;strokeWidth=2;" edge="1" source="bt_repeat" target="bt_dialog" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="be5" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="bt_dialog" target="bt_listen" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be5l" value="①" style="edgeLabel;html=1;fontSize=9;fontColor=#82b366;" vertex="1" connectable="0" parent="be5"><mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="be6" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="bt_dialog" target="bt_intent" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be6l" value="②" style="edgeLabel;html=1;fontSize=9;fontColor=#82b366;" vertex="1" connectable="0" parent="be6"><mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="be7" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="bt_dialog" target="bt_selector" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be7l" value="③" style="edgeLabel;html=1;fontSize=9;fontColor=#82b366;" vertex="1" connectable="0" parent="be7"><mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="be8" style="rounded=1;strokeColor=#82b366;strokeWidth=1;" edge="1" source="bt_dialog" target="bt_speak" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be8l" value="④" style="edgeLabel;html=1;fontSize=9;fontColor=#82b366;" vertex="1" connectable="0" parent="be8"><mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="be9" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="bt_selector" target="bt_a1" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be10" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="bt_selector" target="bt_a2" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be11" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="bt_selector" target="bt_a3" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be12" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="bt_selector" target="bt_a4" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="be13" style="rounded=1;strokeColor=#d79b00;strokeWidth=1;" edge="1" source="bt_selector" target="bt_a5" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Notes -->
+        <mxCell id="note1" value="&lt;b&gt;memory=True&lt;/b&gt;: 记住已完成的子节点,&#xa;WakeWord SUCCESS 后不会重新执行" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#f5f5f5;strokeColor=#aaa;fontSize=10;align=left;spacingLeft=5;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="250" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note2" value="&lt;b&gt;memory=False&lt;/b&gt;: 每次 tick 从头开始,&#xa;每轮对话完成后自动重置" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#f5f5f5;strokeColor=#aaa;fontSize=10;align=left;spacingLeft=5;" vertex="1" parent="1">
+          <mxGeometry x="60" y="350" width="250" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note3" value="&lt;b&gt;Selector 规则&lt;/b&gt;: 从左到右尝试,&#xa;第一个 SUCCESS 的子节点胜出,&#xa;FAILURE 则尝试下一个" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#f5f5f5;strokeColor=#aaa;fontSize=10;align=left;spacingLeft=5;" vertex="1" parent="1">
+          <mxGeometry x="60" y="490" width="220" height="60" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="data-flow" name="数据流">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="df_title" value="&lt;b&gt;数据流向图&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;" vertex="1" parent="1">
+          <mxGeometry x="620" y="20" width="160" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Microphone -->
+        <mxCell id="df_mic" value="🎤 麦克风" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;size=20;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Audio Queue -->
+        <mxCell id="df_queue" value="dialog_audio_queue" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="310" y="110" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- KWS -->
+        <mxCell id="df_kws" value="KWS&#xa;唤醒词检测" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="80" width="140" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- ASR -->
+        <mxCell id="df_asr" value="ASR&#xa;语音识别" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="240" width="140" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Blackboard -->
+        <mxCell id="df_bb" value="Blackboard" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#666666;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="200" width="120" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Intent -->
+        <mxCell id="df_intent" value="意图识别&#xa;(关键词匹配)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="90" width="150" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Action Router -->
+        <mxCell id="df_action" value="Action 分发&#xa;(Selector)" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;size=20;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="260" width="150" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- TTS -->
+        <mxCell id="df_tts" value="TTS&#xa;语音合成" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="400" width="140" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Speaker -->
+        <mxCell id="df_speaker" value="🔊 扬声器" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;size=20;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="990" y="570" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- LLM -->
+        <mxCell id="df_llm" value="Ollama LLM" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="250" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Edges with labels -->
+        <mxCell id="de1" style="rounded=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=block;" edge="1" source="df_mic" target="df_queue" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de1l" value="PCM&#xa;float32" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de1"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de2" style="rounded=1;strokeColor=#9673a6;strokeWidth=2;endArrow=block;" edge="1" source="df_queue" target="df_kws" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de2l" value="待机态" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de2"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de3" style="rounded=1;strokeColor=#9673a6;strokeWidth=2;endArrow=block;" edge="1" source="df_queue" target="df_asr" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de3l" value="对话态" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de3"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de4" style="rounded=1;strokeColor=#82b366;strokeWidth=2;endArrow=block;" edge="1" source="df_asr" target="df_bb" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de4l" value="user_command" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de4"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de5" style="rounded=1;strokeColor=#82b366;strokeWidth=2;endArrow=block;" edge="1" source="df_bb" target="df_intent" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de5l" value="user_command" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de5"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de6" style="rounded=1;strokeColor=#d79b00;strokeWidth=2;endArrow=block;" edge="1" source="df_intent" target="df_action" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de6l" value="intent" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de6"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de7" style="rounded=1;strokeColor=#b85450;strokeWidth=2;endArrow=block;" edge="1" source="df_action" target="df_tts" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de7l" value="response_text" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de7"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de8" style="rounded=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=block;" edge="1" source="df_tts" target="df_speaker" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de8l" value="audio" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de8"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="de9" style="rounded=1;strokeColor=#9673a6;strokeWidth=2;endArrow=block;dashed=1;" edge="1" source="df_action" target="df_llm" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="de9l" value="intent==chat" style="edgeLabel;html=1;fontSize=9;fontColor=#666;" vertex="1" connectable="0" parent="de9"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+        <!-- Loop back arrow -->
+        <mxCell id="de10" value="" style="rounded=1;strokeColor=#82b366;strokeWidth=2;endArrow=block;dashed=1;dashPattern=5 5;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="df_tts" target="df_asr" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="470" y="450" />
+              <mxPoint x="470" y="290" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="de10l" value="循环对话&#xa;(SuccessIsRunning)" style="edgeLabel;html=1;fontSize=9;fontColor=#82b366;fontStyle=1;" vertex="1" connectable="0" parent="de10"><mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

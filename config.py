@@ -52,8 +52,10 @@ class RobotConfig:
 
     # --- TTS 音色 ---
     # aishell3 模型支持 sid 0-173，共 174 种音色
-    tts_speaker_id: int = 0
+    tts_speaker_id: int = 21
     tts_speed: float = 1.0
+    tts_max_chars_per_chunk: int = 120
+    tts_pause_seconds: float = 0.15
 
     # --- VAD (语音活动检测) ---
     vad_threshold: float = 0.5
@@ -62,11 +64,12 @@ class RobotConfig:
 
     # --- 对话 ---
     dialog_timeout: float = 15.0  # 秒，无活动后超时回到 idle
+    interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断
 
     # --- LLM (langchain-ollama) ---
     llm_model: str = "deepseek-r1:8b"
     llm_base_url: str = "http://localhost:11434"
-    llm_system_prompt: str = "你是一个机器人助手，请用简短的中文回答用户的问题。"
+    llm_system_prompt: str = "你是一个机器人助手，请用简短的中文回答用户的问题, 不要输出 emoji 表情和其他任何表情符号。"
     llm_max_history: int = 10  # 保留最近 N 轮对话历史
 
     # --- 意图关键词映射 ---

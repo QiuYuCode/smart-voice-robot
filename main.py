@@ -10,19 +10,17 @@
     Root (Sequence, memory=True)
     ├── WaitForWakeWord (KWS)
     ├── WakeupResponse ("我在，请说")
-    └── ActiveState (Parallel, SuccessOnOne)
-        ├── InterruptMonitor (VAD + 超时)
-        └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
-            └── DialogLoop (Sequence, memory=False)
-                ├── ListenCommand (ASR)
-                ├── RecognizeIntent
-                ├── ActionSelector (Selector)
-                │   ├── OpenCameraAction
-                │   ├── RobotArmAction
-                │   ├── NavigationAction (ROS 预留)
-                │   ├── LLMDialogAction (LangChain + Ollama)
-                │   └── DefaultResponse
-                └── SpeakResponse (非阻塞 TTS)
+    └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
+        └── DialogLoop (Sequence, memory=False)
+            ├── ListenCommand (ASR)
+            ├── RecognizeIntent
+            ├── ActionSelector (Selector)
+            │   ├── OpenCameraAction
+            │   ├── RobotArmAction
+            │   ├── NavigationAction (ROS 预留)
+            │   ├── LLMDialogAction (LangChain + Ollama)
+            │   └── DefaultResponse
+            └── SpeakResponse (阻塞式 TTS)
 
 用法:
     python robot_voice.py
@@ -41,7 +39,6 @@ from nodes import (
     RecognizeIntent,
     SpeakResponse,
     WakeupResponse,
-    InterruptMonitor,
     OpenCameraAction,
     RobotArmAction,
     NavigationAction,
@@ -86,32 +83,21 @@ def create_tree(
 
     # === 3. DialogRepeat: 无限循环对话 ===
     # SuccessIsRunning 装饰器: 将 DialogLoop 的 SUCCESS 映射为 RUNNING，
-    # 使对话在 Parallel 中持续循环，直到 InterruptMonitor 返回 SUCCESS 终止
+    # 使对话持续循环
     dialog_repeat = py_trees.decorators.SuccessIsRunning(
         name="DialogRepeat",
         child=dialog_loop,
     )
 
-    # === 4. ActiveState: 并行运行对话和打断监控 ===
-    # SuccessOnOne: InterruptMonitor SUCCESS → 整个 Parallel 终止
-    active_state = py_trees.composites.Parallel(
-        name="ActiveState",
-        policy=py_trees.common.ParallelPolicy.SuccessOnOne(),
-    )
-    active_state.add_children([
-        InterruptMonitor("Interrupt", engine, config=config),
-        dialog_repeat,
-    ])
-
-    # === 5. Root: 完整流程 ===
-    # memory=True: WakeWord SUCCESS 后记住状态，下一 tick 直接进入 ActiveState
+    # === 4. Root: 完整流程 ===
+    # memory=True: WakeWord SUCCESS 后记住状态，下一 tick 直接进入对话循环
     root = py_trees.composites.Sequence(
         name="Root", memory=True
     )
     root.add_children([
         WaitForWakeWord("WakeWord", engine),
         WakeupResponse("WakeupSound", engine, config),
-        active_state,
+        dialog_repeat,
     ])
 
     return root

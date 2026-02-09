@@ -4,7 +4,6 @@ from nodes.wake_word import WaitForWakeWord
 from nodes.listen import ListenCommand
 from nodes.intent import RecognizeIntent
 from nodes.speak import SpeakResponse, WakeupResponse
-from nodes.interrupt import InterruptMonitor
 from nodes.actions import (
     OpenCameraAction,
     RobotArmAction,
@@ -19,7 +18,6 @@ __all__ = [
     "RecognizeIntent",
     "SpeakResponse",
     "WakeupResponse",
-    "InterruptMonitor",
     "OpenCameraAction",
     "RobotArmAction",
     "NavigationAction",

@@ -29,8 +29,8 @@ class WaitForWakeWord(Behaviour):
         # 重置 KWS 流状态
         if self.kws_stream is not None:
             self.engine.kws.reset_stream(self.kws_stream)
-        # 清空所有队列，避免处理旧数据
-        self.engine.clear_all_queues()
+        # 清空队列，避免处理旧数据
+        self.engine.clear_dialog_queue()
 
     def update(self):
         while not self.engine.dialog_audio_queue.empty():
@@ -46,8 +46,6 @@ class WaitForWakeWord(Behaviour):
                     self.engine.kws.reset_stream(self.kws_stream)
                     return Status.SUCCESS
 
-        # 消耗掉监控队列里的数据，避免积压
-        self.engine.clear_monitor_queue()
         return Status.RUNNING
 
     def terminate(self, new_status):

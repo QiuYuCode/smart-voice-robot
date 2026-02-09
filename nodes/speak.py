@@ -26,6 +26,7 @@ class SpeakResponse(Behaviour):
         self.is_playing = False
         self.play_start_time = 0.0
         self.play_duration = 0.0
+        self.stream = None
 
         self.blackboard = self.attach_blackboard_client(
             name="SpeakResponse", namespace="dialog"
@@ -35,6 +36,9 @@ class SpeakResponse(Behaviour):
         )
         self.blackboard.register_key(
             key="is_speaking", access=py_trees.common.Access.WRITE
+        )
+        self.blackboard.register_key(
+            key="speak_start_time", access=py_trees.common.Access.WRITE
         )
         self.blackboard.register_key(
             key="last_activity_time", access=py_trees.common.Access.WRITE
@@ -47,38 +51,27 @@ class SpeakResponse(Behaviour):
             return
 
         self.logger.info(f"机器人说: {text}")
-        samples, sample_rate = self.engine.generate_speech(text)
-
-        # 非阻塞播放
-        sd.play(samples, samplerate=sample_rate)
-        self.is_playing = True
-        self.play_start_time = time.time()
-        self.play_duration = len(samples) / sample_rate
         self.blackboard.is_speaking = True
-
-        # 清空监控队列，避免播放前积压的旧数据触发 VAD
-        self.engine.clear_monitor_queue()
+        self.blackboard.speak_start_time = time.time()
+        # 改为阻塞式播放，确保语音完整播放
+        self.engine.speak_blocking(text)
+        self.blackboard.is_speaking = False
+        self.blackboard.speak_start_time = 0.0
 
     def update(self):
-        if not self.is_playing:
-            self._finish()
-            return Status.SUCCESS
-
-        # 通过时间判断播放是否完毕
-        elapsed = time.time() - self.play_start_time
-        if elapsed >= self.play_duration:
-            self._finish()
-            return Status.SUCCESS
-
-        return Status.RUNNING
+        # 阻塞式播放在 initialise 中已完成
+        self._finish()
+        return Status.SUCCESS
 
     def terminate(self, new_status):
         """被打断或正常结束时，确保停止播放并重置标志"""
         if self.is_playing:
             sd.stop()
             self.is_playing = False
+            self.stream = None
         try:
             self.blackboard.is_speaking = False
+            self.blackboard.speak_start_time = 0.0
         except Exception:
             pass
 
@@ -86,7 +79,9 @@ class SpeakResponse(Behaviour):
         """播放结束的清理"""
         sd.stop()
         self.is_playing = False
+        self.stream = None
         self.blackboard.is_speaking = False
+        self.blackboard.speak_start_time = 0.0
         self.blackboard.last_activity_time = time.time()
 
 

@@ -33,6 +33,9 @@ class InterruptMonitor(Behaviour):
             key="is_speaking", access=py_trees.common.Access.WRITE
         )
         self.blackboard.register_key(
+            key="speak_start_time", access=py_trees.common.Access.WRITE
+        )
+        self.blackboard.register_key(
             key="last_activity_time", access=py_trees.common.Access.WRITE
         )
         self.blackboard.register_key(
@@ -43,6 +46,7 @@ class InterruptMonitor(Behaviour):
         self.blackboard.interrupted = False
         # 初始化 is_speaking，避免首次进入时 KeyError
         self.blackboard.is_speaking = False
+        self.blackboard.speak_start_time = 0.0
         # 确保 last_activity_time 存在，避免首次进入时 KeyError
         self.blackboard.last_activity_time = time.time()
         # 重置 VAD 状态
@@ -63,6 +67,10 @@ class InterruptMonitor(Behaviour):
         is_speaking = getattr(self.blackboard, "is_speaking", False)
 
         if is_speaking:
+            speak_start_time = getattr(self.blackboard, "speak_start_time", 0.0)
+            if time.time() - speak_start_time < self.config.interrupt_min_speech_seconds:
+                # TTS 刚开始播放，忽略短暂的回声触发
+                return Status.RUNNING
             # 将监控队列中的音频喂给 VAD
             while not self.engine.monitor_audio_queue.empty():
                 data = self.engine.monitor_audio_queue.get()

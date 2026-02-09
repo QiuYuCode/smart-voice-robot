@@ -27,6 +27,61 @@ except:
 
 MIC_LOCK = threading.Lock()
 
+def set_chinese_voice(tts_engine):
+    try:
+        voices = tts_engine.getProperty("voices")
+    except Exception:
+        return False
+
+    for voice in voices:
+        voice_id = f"{voice.id} {voice.name}".lower()
+        languages = []
+        try:
+            languages = [
+                lang.decode("utf-8") if isinstance(lang, bytes) else str(lang)
+                for lang in getattr(voice, "languages", [])
+            ]
+        except Exception:
+            languages = []
+
+        if any(
+            "zh" in lang.lower() or "chinese" in lang.lower()
+            for lang in languages
+        ) or ("zh" in voice_id or "chinese" in voice_id):
+            tts_engine.setProperty("voice", voice.id)
+            return True
+
+    return False
+
+
+def streaming_vosk_recognize(source, vosk_model, max_listen_seconds, silence_timeout, chunk_size=4000):
+    rec = vosk.KaldiRecognizer(vosk_model, source.SAMPLE_RATE)
+    start_time = time.time()
+    last_voice_time = None
+    final_text = ""
+
+    while time.time() - start_time < max_listen_seconds:
+        data = source.stream.read(chunk_size)
+        if rec.AcceptWaveform(data):
+            result_dict = json.loads(rec.Result())
+            text = result_dict.get("text", "")
+            if text:
+                final_text = text
+                last_voice_time = time.time()
+        else:
+            partial = json.loads(rec.PartialResult()).get("partial", "")
+            if partial:
+                last_voice_time = time.time()
+
+        if last_voice_time and time.time() - last_voice_time > silence_timeout:
+            break
+
+    if not final_text:
+        result_dict = json.loads(rec.FinalResult())
+        final_text = result_dict.get("text", "")
+
+    return final_text.replace(" ", "")
+
 
 # ============================================================================
 # 1. 唤醒词检测节点
@@ -65,21 +120,12 @@ class WakeWordDetector(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.2)
-                audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=5)
-
-            raw_data = audio.get_raw_data()
-            rec = vosk.KaldiRecognizer(self.vosk_model, source.SAMPLE_RATE)
-            
-            if rec.AcceptWaveform(raw_data):
-                result = rec.Result()
-                result_dict = json.loads(result)
-                text = result_dict.get("text", "")
-            else:
-                result = rec.FinalResult()
-                result_dict = json.loads(result)
-                text = result_dict.get("text", "")
-
-            text = text.replace(" ", "")
+                text = streaming_vosk_recognize(
+                    source,
+                    self.vosk_model,
+                    max_listen_seconds=5,
+                    silence_timeout=0.8,
+                )
 
             if text and any(wake in text for wake in ["你好助手", "小助手", "助手"]):
                 self.logger.info(f"✅ 检测到唤醒词: '{text}'")
@@ -148,21 +194,12 @@ class InterruptMonitor(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.1)
-                audio = self.recognizer.listen(source, timeout=0.5, phrase_time_limit=3)
-
-            raw_data = audio.get_raw_data()
-            rec = vosk.KaldiRecognizer(self.vosk_model, source.SAMPLE_RATE)
-            
-            if rec.AcceptWaveform(raw_data):
-                result = rec.Result()
-                result_dict = json.loads(result)
-                text = result_dict.get("text", "")
-            else:
-                result = rec.FinalResult()
-                result_dict = json.loads(result)
-                text = result_dict.get("text", "")
-
-            text = text.replace(" ", "")
+                text = streaming_vosk_recognize(
+                    source,
+                    self.vosk_model,
+                    max_listen_seconds=2,
+                    silence_timeout=0.6,
+                )
             
             if text and any(word in text for word in ["停止", "别说了", "退出", "休眠"]):
                 self.logger.warning(f"⚠️ 检测到打断指令: '{text}'")
@@ -196,7 +233,9 @@ class PlayWakeupSound(py_trees.behaviour.Behaviour):
     def setup(self):
         try:
             self.tts_engine = pyttsx3.init()
+            set_chinese_voice(self.tts_engine)
             self.tts_engine.setProperty('rate', 150)  # 语速
+            self.tts_engine.setProperty('voice', "cmn")  # 
             self.tts_engine.setProperty('volume', 0.9)  # 音量
             self.logger.info("TTS 引擎初始化成功")
         except Exception as e:
@@ -246,6 +285,7 @@ class PlayResponseSound(py_trees.behaviour.Behaviour):
     def setup(self):
         try:
             self.tts_engine = pyttsx3.init()
+            set_chinese_voice(self.tts_engine)
             self.tts_engine.setProperty('rate', 150)
             self.tts_engine.setProperty('volume', 0.9)
             self.logger.info("响应 TTS 引擎初始化成功")
@@ -344,21 +384,12 @@ class ListenForCommand(py_trees.behaviour.Behaviour):
                 return py_trees.common.Status.RUNNING
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.2)
-                audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=6)
-
-            raw_data = audio.get_raw_data()
-            rec = vosk.KaldiRecognizer(self.vosk_model, source.SAMPLE_RATE)
-            
-            if rec.AcceptWaveform(raw_data):
-                result = rec.Result()
-                result_dict = json.loads(result)
-                text = result_dict.get("text", "")
-            else:
-                result = rec.FinalResult()
-                result_dict = json.loads(result)
-                text = result_dict.get("text", "")
-
-            text = text.replace(" ", "")
+                text = streaming_vosk_recognize(
+                    source,
+                    self.vosk_model,
+                    max_listen_seconds=6,
+                    silence_timeout=1.0,
+                )
             
             if text:
                 self.logger.info(f"📝 识别到指令: '{text}'")

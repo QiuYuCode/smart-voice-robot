@@ -3,12 +3,19 @@ name = "pytree-learing"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
+    "ollama>=0.6.1",
     "opencv-python>=4.13.0.90",
     "py-trees>=2.4.0",
     "pyaudio>=0.2.14",
-    "pyttsx3>=2.91",
+    "sherpa-onnx>=1.12.23",
+    "sherpa-onnx-bin>=1.12.23",
+    "sounddevice>=0.5.5",
     "speechrecognition>=3.14.5",
-    "vosk>=0.3.45",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

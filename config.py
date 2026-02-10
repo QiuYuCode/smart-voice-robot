@@ -43,7 +43,17 @@ CHUNK_SIZE = int(SAMPLE_RATE * 0.1)  # 0.1 秒 = 1600 采样点
 class RobotConfig:
     """机器人语音助手的全部可配置参数"""
 
-    # --- 唤醒词 (KWS) ---
+    # --- 唤醒模式 ---
+    # "software": sherpa-onnx KWS 软件唤醒
+    # "hardware": RK3328 降噪板硬件唤醒
+    wake_mode: str = "hardware"
+
+    # --- 硬件唤醒 (RK3328 降噪板) ---
+    hw_serial_port: str = "/dev/ttyUSB0"
+    hw_serial_baudrate: int = 115200
+    hw_mic_array: str = "mic6_circle"  # mic4: 线性4麦, mic6: 线性6麦, mic6_circle: 环形6麦
+
+    # --- 唤醒词 (KWS, 仅 software 模式) ---
     # 替换 keywords_file 路径即可更换唤醒词
     kws_keywords_file: str = f"{KWS_DIR}/keywords.txt"
     kws_keywords_score: float = 1.0

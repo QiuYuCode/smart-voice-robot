@@ -35,6 +35,7 @@ from config import default_config, RobotConfig
 from engine import VoiceEngine
 from nodes import (
     WaitForWakeWord,
+    HardwareWakeWord,
     ListenCommand,
     RecognizeIntent,
     SpeakResponse,
@@ -94,8 +95,14 @@ def create_tree(
     root = py_trees.composites.Sequence(
         name="Root", memory=True
     )
+    # 根据配置选择唤醒节点
+    if config.wake_mode == "hardware":
+        wake_node = HardwareWakeWord("WakeWord", engine)
+    else:
+        wake_node = WaitForWakeWord("WakeWord", engine)
+
     root.add_children([
-        WaitForWakeWord("WakeWord", engine),
+        wake_node,
         WakeupResponse("WakeupSound", engine, config),
         dialog_repeat,
     ])
@@ -116,7 +123,12 @@ def main():
     tree.setup(timeout=30)
 
     print("\n系统启动完毕! 等待唤醒词...")
-    print(f"  唤醒词文件: {config.kws_keywords_file}")
+    print(f"  唤醒模式: {config.wake_mode}")
+    if config.wake_mode == "software":
+        print(f"  唤醒词文件: {config.kws_keywords_file}")
+    else:
+        print(f"  串口设备: {config.hw_serial_port}")
+        print(f"  麦克风阵列: {config.hw_mic_array}")
     print(f"  TTS 音色 ID: {config.tts_speaker_id}")
     print(f"  LLM 模型: {config.llm_model}")
     print(f"  对话超时: {config.dialog_timeout}s")

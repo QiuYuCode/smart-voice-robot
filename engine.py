@@ -36,19 +36,29 @@ class VoiceEngine:
         self.is_running = True
         self.mic_stream = None
 
-        # 1. KWS (唤醒词检测)
-        self.kws = sherpa_onnx.KeywordSpotter(
-            tokens=f"{KWS_DIR}/tokens.txt",
-            encoder=f"{KWS_DIR}/encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-            decoder=f"{KWS_DIR}/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-            joiner=f"{KWS_DIR}/joiner-epoch-12-avg-2-chunk-16-left-64.onnx",
-            keywords_file=config.kws_keywords_file,
-            keywords_score=config.kws_keywords_score,
-            keywords_threshold=config.kws_keywords_threshold,
-            num_trailing_blanks=config.kws_num_trailing_blanks,
-            num_threads=config.num_threads,
-            sample_rate=SAMPLE_RATE,
-        )
+        # 1. 唤醒检测（按模式选择）
+        self.kws = None
+        self.rk3328_driver = None
+
+        if config.wake_mode == "software":
+            self.kws = sherpa_onnx.KeywordSpotter(
+                tokens=f"{KWS_DIR}/tokens.txt",
+                encoder=f"{KWS_DIR}/encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+                decoder=f"{KWS_DIR}/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+                joiner=f"{KWS_DIR}/joiner-epoch-12-avg-2-chunk-16-left-64.onnx",
+                keywords_file=config.kws_keywords_file,
+                keywords_score=config.kws_keywords_score,
+                keywords_threshold=config.kws_keywords_threshold,
+                num_trailing_blanks=config.kws_num_trailing_blanks,
+                num_threads=config.num_threads,
+                sample_rate=SAMPLE_RATE,
+            )
+        elif config.wake_mode == "hardware":
+            from rk3328 import RK3328Driver
+            self.rk3328_driver = RK3328Driver(
+                port=config.hw_serial_port,
+                baudrate=config.hw_serial_baudrate,
+            )
 
         # 2. ASR (流式语音识别)
         self.asr = sherpa_onnx.OnlineRecognizer.from_transducer(
@@ -89,7 +99,11 @@ class VoiceEngine:
         self.dialog_audio_queue.put(raw_bytes)
 
     def start(self):
-        """启动麦克风音频流"""
+        """启动麦克风音频流和硬件驱动（如有）"""
+        # 启动 RK3328 驱动（需在麦克风之前，确保握手响应及时）
+        if self.rk3328_driver is not None:
+            self.rk3328_driver.start()
+
         self.mic_stream = sd.RawInputStream(
             samplerate=SAMPLE_RATE,
             channels=1,
@@ -101,11 +115,13 @@ class VoiceEngine:
         print("麦克风已启动。")
 
     def stop(self):
-        """停止音频流"""
+        """停止音频流和硬件驱动"""
         self.is_running = False
         if self.mic_stream:
             self.mic_stream.stop()
             self.mic_stream.close()
+        if self.rk3328_driver is not None:
+            self.rk3328_driver.stop()
 
     # ------------------------------------------------------------------
     # TTS

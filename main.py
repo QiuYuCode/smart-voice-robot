@@ -3,27 +3,33 @@
 
 基于 py_trees 行为树实现的语音交互系统。
 支持: 可配置唤醒词、可切换音色、关键词触发特定行为、
-      LLM 自由对话、非阻塞 TTS 播放、语音打断。
+      LLM 自由对话、VAD 静默超时、语音退出指令。
 
 行为树结构:
 
     Root (Sequence, memory=True)
-    ├── WaitForWakeWord (KWS)
+    ├── WaitForWakeWord (KWS / 硬件唤醒)
     ├── WakeupResponse ("我在，请说")
     └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
         └── DialogLoop (Sequence, memory=False)
-            ├── ListenCommand (ASR)
+            ├── ListenCommand (流式 ASR + VAD 静默超时)
             ├── RecognizeIntent
             ├── ActionSelector (Selector)
             │   ├── OpenCameraAction
             │   ├── RobotArmAction
             │   ├── NavigationAction (ROS 预留)
             │   ├── LLMDialogAction (LangChain + Ollama)
+            │   ├── BackToWakeUp (intent==exit)
             │   └── DefaultResponse
-            └── SpeakResponse (阻塞式 TTS)
+            ├── SpeakResponse (阻塞式 TTS)
+            └── DialogContinueGuard (exit → FAILURE 终止循环)
+
+回到唤醒的两条路径:
+    1. VAD 静默超时: ListenCommand FAILURE → DialogLoop FAILURE → Root FAILURE
+    2. 用户说"退出": DialogContinueGuard FAILURE → DialogLoop FAILURE → Root FAILURE
 
 用法:
-    python robot_voice.py
+    python main.py
 """
 
 import time

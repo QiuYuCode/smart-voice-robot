@@ -6,25 +6,26 @@
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 # ============================================================================
 # 模型路径 (根据实际下载位置修改)
 # ============================================================================
 
-MODELS_BASE = "/home/create/DataDisk/WorkSpace/models/voice_models"
+MODELS_BASE = Path("/home/create/DataDisk/WorkSpace/models/voice_models")
 
 # sherpa-onnx 流式 ASR
-ASR_DIR = f"{MODELS_BASE}/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
+ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
 
 # sherpa-onnx 关键词检测
-KWS_DIR = f"{MODELS_BASE}/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
+KWS_DIR = MODELS_BASE / "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
 
 # sherpa-onnx VITS TTS (aishell3, 174 说话人)
-TTS_DIR = f"{MODELS_BASE}/vits-zh-aishell3"
+TTS_DIR = MODELS_BASE / "vits-zh-aishell3"
 
 # Silero VAD 模型
-VAD_MODEL = f"{MODELS_BASE}/silero_vad.onnx"
+VAD_DIR = MODELS_BASE / "silero_vad.onnx"
 
 
 # ============================================================================
@@ -55,7 +56,7 @@ class RobotConfig:
 
     # --- 唤醒词 (KWS, 仅 software 模式) ---
     # 替换 keywords_file 路径即可更换唤醒词
-    kws_keywords_file: str = f"{KWS_DIR}/keywords.txt"
+    kws_keywords_file: str = str(KWS_DIR / "keywords.txt")
     kws_keywords_score: float = 1.0
     kws_keywords_threshold: float = 0.25
     kws_num_trailing_blanks: int = 1
@@ -73,7 +74,7 @@ class RobotConfig:
     vad_min_speech_duration: float = 0.25
 
     # --- 对话 ---
-    dialog_timeout: float = 15.0  # 秒，无活动后超时回到 idle
+    dialog_timeout: float = 10.0  # 秒，无活动后超时回到 idle
     interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断
 
     # --- LLM (langchain-ollama) ---
@@ -88,12 +89,13 @@ class RobotConfig:
         "open_camera": ["打开相机", "拍照", "看一下", "摄像头"],
         "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
         "navigation": ["导航", "前往", "去", "带我去"],
+        "exit": ["退出", "结束", "停止", "没事了"],
     })
 
     # --- TTS 响应模板 ---
     tts_responses: dict[str, str] = field(default_factory=lambda: {
         "wakeup": "我在，请说。",
-        "timeout": "好的，我先休息了。",
+        "timeout": "没有听到您的命令，有需要可以再叫我。",
     })
 
     # --- 系统 ---

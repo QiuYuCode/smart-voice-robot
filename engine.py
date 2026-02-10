@@ -17,6 +17,7 @@ from config import (
     ASR_DIR,
     KWS_DIR,
     TTS_DIR,
+    VAD_DIR,
     SAMPLE_RATE,
     CHUNK_SIZE,
     RobotConfig,
@@ -84,6 +85,19 @@ class VoiceEngine:
                 )
             )
         )
+
+        # 4. VAD (语音活动检测 - Silero VAD)
+        vad_config = sherpa_onnx.VadModelConfig()
+        vad_config.silero_vad.model = str(VAD_DIR)
+        vad_config.silero_vad.threshold = config.vad_threshold
+        vad_config.silero_vad.min_silence_duration = config.vad_min_silence_duration
+        vad_config.silero_vad.min_speech_duration = config.vad_min_speech_duration
+        vad_config.sample_rate = SAMPLE_RATE
+
+        self.vad = sherpa_onnx.VoiceActivityDetector(
+            vad_config, buffer_size_in_seconds=30
+        )
+        self.vad_window_size = vad_config.silero_vad.window_size
 
         print("所有模型加载完成。")
 

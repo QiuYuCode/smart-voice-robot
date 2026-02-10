@@ -40,11 +40,13 @@ from nodes import (
     RecognizeIntent,
     SpeakResponse,
     WakeupResponse,
+    DialogContinueGuard,
     OpenCameraAction,
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
     DefaultResponse,
+    BackToWakeUp,
 )
 
 
@@ -67,11 +69,14 @@ def create_tree(
         RobotArmAction("RobotArm"),
         NavigationAction("Navigation"),
         LLMDialogAction("LLMDialog", config=config),
+        BackToWakeUp("BackToWakeUp"),
         DefaultResponse("DefaultResponse"),
     ])
 
     # === 2. DialogLoop: 单轮对话流程 ===
     # memory=False: 每轮对话结束后自动重置，从 Listen 重新开始
+    # DialogContinueGuard 放在末尾：当 intent == "exit" 时返回 FAILURE，
+    # 使 DialogLoop 整体 FAILURE → SuccessIsRunning 透传 → Root FAILURE → 回到唤醒
     dialog_loop = py_trees.composites.Sequence(
         name="DialogLoop", memory=False
     )
@@ -80,6 +85,7 @@ def create_tree(
         RecognizeIntent("Intent", config=config),
         action_selector,
         SpeakResponse("Speak", engine),
+        DialogContinueGuard("ContinueGuard"),
     ])
 
     # === 3. DialogRepeat: 无限循环对话 ===

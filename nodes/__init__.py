@@ -5,12 +5,14 @@ from nodes.hw_wake_word import HardwareWakeWord
 from nodes.listen import ListenCommand
 from nodes.intent import RecognizeIntent
 from nodes.speak import SpeakResponse, WakeupResponse
+from nodes.guards import DialogContinueGuard
 from nodes.actions import (
     OpenCameraAction,
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
     DefaultResponse,
+    BackToWakeUp,
 )
 
 __all__ = [
@@ -20,9 +22,11 @@ __all__ = [
     "RecognizeIntent",
     "SpeakResponse",
     "WakeupResponse",
+    "DialogContinueGuard",
     "OpenCameraAction",
     "RobotArmAction",
     "NavigationAction",
     "LLMDialogAction",
     "DefaultResponse",
+    "BackToWakeUp",
 ]

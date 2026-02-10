@@ -387,10 +387,12 @@ class RK3328Driver:
             if event_type == 4:
                 # 唤醒事件
                 info = self._ensure_dict(content.get("info", {}))
+                info_ivw = info.get("ivw", "")
+                wake_word = info_ivw.get("keyword", "")
                 event = WakeEvent(
-                    keyword=info.get("keyword", ""),
+                    keyword=wake_word,
                     beam=content.get("arg1", 0),
-                    angle=info.get("angle", 0.0),
+                    angle=info_ivw.get("angle", 0.0),
                     info=info,
                     timestamp=time.time(),
                 )

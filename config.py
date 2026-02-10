@@ -74,19 +74,31 @@ class RobotConfig:
     vad_min_speech_duration: float = 0.25
 
     # --- 对话 ---
-    dialog_timeout: float = 10.0  # 秒，无活动后超时回到 idle
+    dialog_timeout: float = 15.0  # 秒，无活动后超时回到 idle
     interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断
 
-    # --- LLM (langchain-ollama) ---
+    # --- 相机 ---
+    camera_index: int = 4  # /dev/video 设备索引 (RealSense 彩色流)
+    camera_width: int = 640
+    camera_height: int = 480
+    camera_save_dir: str = "captures"  # 照片/视频保存目录 (相对于项目根目录)
+    camera_record_seconds: float = 10.0  # 视频录制时长 (秒)
+    camera_record_fps: float = 30.0  # 视频录制帧率 (相机未报告时使用)
+
+    # --- LLM ---
+    # provider: "ollama" | "openai" | "deepseek" | "anthropic"
+    llm_provider: str = "ollama"
     llm_model: str = "qwen2.5:3b"
     llm_base_url: str = "http://localhost:11434"
+    llm_api_key: str = ""  # 在线模型的 API Key (ollama 不需要)
     llm_system_prompt: str = "你是一个机器人助手，请用简短的中文回答用户的问题, 不要输出 emoji 表情和其他任何表情符号。"
     llm_max_history: int = 10  # 保留最近 N 轮对话历史
 
     # --- 意图关键词映射 ---
     # key: 意图名称, value: 触发该意图的关键词列表
     intent_patterns: dict[str, list[str]] = field(default_factory=lambda: {
-        "open_camera": ["打开相机", "拍照", "看一下", "摄像头"],
+        "take_photo": ["拍照", "拍张照", "拍个照", "拍一张", "照片", "看一下"],
+        "record_video": ["录像", "录制视频", "录视频", "录一段", "摄像"],
         "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
         "navigation": ["导航", "前往", "去", "带我去"],
         "exit": ["退出", "结束", "停止", "没事了"],

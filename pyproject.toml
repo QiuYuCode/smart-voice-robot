@@ -17,6 +17,11 @@ dependencies = [
     "sounddevice>=0.5.5",
 ]
 
+[project.optional-dependencies]
+openai = ["langchain-openai"]
+anthropic = ["langchain-anthropic"]
+online = ["langchain-openai", "langchain-anthropic"]
+
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"

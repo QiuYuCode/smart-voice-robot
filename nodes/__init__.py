@@ -7,7 +7,8 @@ from nodes.intent import RecognizeIntent
 from nodes.speak import SpeakResponse, WakeupResponse
 from nodes.guards import DialogContinueGuard
 from nodes.actions import (
-    OpenCameraAction,
+    TakePhotoAction,
+    RecordVideoAction,
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
@@ -23,7 +24,8 @@ __all__ = [
     "SpeakResponse",
     "WakeupResponse",
     "DialogContinueGuard",
-    "OpenCameraAction",
+    "TakePhotoAction",
+    "RecordVideoAction",
     "RobotArmAction",
     "NavigationAction",
     "LLMDialogAction",

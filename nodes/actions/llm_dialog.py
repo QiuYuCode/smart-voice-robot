@@ -1,4 +1,6 @@
-"""LLM 对话动作节点 (langchain-ollama)"""
+"""LLM 对话动作节点 (支持多 provider)"""
+
+from __future__ import annotations
 
 import py_trees
 from py_trees.behaviour import Behaviour
@@ -7,12 +9,54 @@ from py_trees.common import Status
 from config import RobotConfig
 
 
+def _create_llm(config: RobotConfig):
+    """根据 config.llm_provider 创建对应的 LangChain Chat Model 实例。"""
+    provider = config.llm_provider.lower()
+
+    if provider == "ollama":
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            model=config.llm_model,
+            base_url=config.llm_base_url,
+        )
+
+    elif provider == "openai":
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=config.llm_model,
+            api_key=config.llm_api_key,
+            base_url=config.llm_base_url or None,
+        )
+
+    elif provider == "deepseek":
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=config.llm_model,
+            api_key=config.llm_api_key,
+            base_url=config.llm_base_url or "https://api.deepseek.com",
+        )
+
+    elif provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(
+            model=config.llm_model,
+            api_key=config.llm_api_key,
+        )
+
+    else:
+        raise ValueError(f"不支持的 LLM provider: {provider}")
+
+
 class LLMDialogAction(Behaviour):
     """
     LLM 自由对话 (fallback)。
 
     当 intent == "chat" 时执行 (所有关键词 action 都 FAILURE 后)。
-    使用 langchain-ollama 的 ChatOllama 连接本地 Ollama 大模型，
+    通过 llm_provider 配置切换本地 Ollama / 在线大模型 (OpenAI, DeepSeek, Anthropic 等)，
     维护对话历史实现多轮会话。
     """
 
@@ -38,17 +82,16 @@ class LLMDialogAction(Behaviour):
     def setup(self, **kwargs):
         """延迟初始化 LLM 连接"""
         try:
-            from langchain_ollama import ChatOllama
-
-            self.llm = ChatOllama(
-                model=self.config.llm_model,
-                base_url=self.config.llm_base_url,
+            self.llm = _create_llm(self.config)
+            self.logger.info(
+                f"LLM 已连接: provider={self.config.llm_provider}, "
+                f"model={self.config.llm_model}"
             )
-            self.logger.info(f"LLM 已连接: {self.config.llm_model}")
-        except ImportError:
+        except ImportError as e:
             self.logger.warning(
-                "langchain-ollama 未安装，LLM 对话不可用。"
-                "请运行: uv add langchain-ollama langchain-core"
+                f"LLM 依赖未安装 ({self.config.llm_provider}): {e}。"
+                "请根据 provider 安装对应包，例如: "
+                "uv add langchain-ollama / langchain-openai / langchain-anthropic"
             )
         except Exception as e:
             self.logger.warning(f"LLM 初始化失败: {e}")

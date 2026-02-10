@@ -15,7 +15,8 @@
             ├── ListenCommand (流式 ASR + VAD 静默超时)
             ├── RecognizeIntent
             ├── ActionSelector (Selector)
-            │   ├── OpenCameraAction
+            │   ├── TakePhotoAction
+            │   ├── RecordVideoAction
             │   ├── RobotArmAction
             │   ├── NavigationAction (ROS 预留)
             │   ├── LLMDialogAction (LangChain + Ollama)
@@ -47,7 +48,8 @@ from nodes import (
     SpeakResponse,
     WakeupResponse,
     DialogContinueGuard,
-    OpenCameraAction,
+    TakePhotoAction,
+    RecordVideoAction,
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
@@ -71,7 +73,8 @@ def create_tree(
         name="ActionSelector", memory=False
     )
     action_selector.add_children([
-        OpenCameraAction("OpenCamera"),
+        TakePhotoAction("TakePhoto", config=config),
+        RecordVideoAction("RecordVideo", config=config),
         RobotArmAction("RobotArm"),
         NavigationAction("Navigation"),
         LLMDialogAction("LLMDialog", config=config),

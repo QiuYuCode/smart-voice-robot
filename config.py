@@ -13,7 +13,7 @@ from pathlib import Path
 # 模型路径 (根据实际下载位置修改)
 # ============================================================================
 
-MODELS_BASE = Path("/home/create/DataDisk/WorkSpace/models/voice_models")
+MODELS_BASE = Path("/home/nvidia/WorkSpace/models/voice_models")
 
 # sherpa-onnx 流式 ASR
 ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
@@ -47,7 +47,7 @@ class RobotConfig:
     # --- 唤醒模式 ---
     # "software": sherpa-onnx KWS 软件唤醒
     # "hardware": RK3328 降噪板硬件唤醒
-    wake_mode: str = "hardware"
+    wake_mode: str = "software"
 
     # --- 硬件唤醒 (RK3328 降噪板) ---
     hw_serial_port: str = "/dev/ttyUSB0"
@@ -78,7 +78,7 @@ class RobotConfig:
     interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断
 
     # --- LLM (langchain-ollama) ---
-    llm_model: str = "deepseek-r1:8b"
+    llm_model: str = "qwen2.5:3b"
     llm_base_url: str = "http://localhost:11434"
     llm_system_prompt: str = "你是一个机器人助手，请用简短的中文回答用户的问题, 不要输出 emoji 表情和其他任何表情符号。"
     llm_max_history: int = 10  # 保留最近 N 轮对话历史

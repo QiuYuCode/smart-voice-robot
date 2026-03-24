@@ -7,6 +7,8 @@
 
 行为树结构:
 
+    关键词匹配模式 (use_llm_planner=False, 默认):
+
     Root (Sequence, memory=True)
     ├── WaitForWakeWord (KWS / 硬件唤醒)
     ├── WakeupResponse ("我在，请说")
@@ -22,6 +24,19 @@
             │   ├── LLMDialogAction (LangChain + Ollama)
             │   ├── BackToWakeUp (intent==exit)
             │   └── DefaultResponse
+            ├── SpeakResponse (阻塞式 TTS)
+            └── DialogContinueGuard (exit → FAILURE 终止循环)
+
+    LLM 规划器模式 (use_llm_planner=True, 支持多指令):
+
+    Root (Sequence, memory=True)
+    ├── WaitForWakeWord (KWS / 硬件唤醒)
+    ├── WakeupResponse ("我在，请说")
+    └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
+        └── DialogLoop (Sequence, memory=False)
+            ├── ListenCommand (流式 ASR + VAD 静默超时)
+            ├── LLMTaskPlanner (LLM Function Calling 解析多步指令)
+            ├── PlanExecutor (依次执行 action_plan)
             ├── SpeakResponse (阻塞式 TTS)
             └── DialogContinueGuard (exit → FAILURE 终止循环)
 
@@ -55,6 +70,8 @@ from nodes import (
     LLMDialogAction,
     DefaultResponse,
     BackToWakeUp,
+    LLMTaskPlanner,
+    PlanExecutor,
 )
 
 
@@ -67,35 +84,40 @@ def create_tree(
     Returns:
         行为树根节点
     """
-    # === 1. ActionSelector: 意图分发 ===
-    # Selector(memory=False): 每次都从头匹配，按优先级尝试
-    action_selector = py_trees.composites.Selector(
-        name="ActionSelector", memory=False
-    )
-    action_selector.add_children([
-        TakePhotoAction("TakePhoto", config=config),
-        RecordVideoAction("RecordVideo", config=config),
-        RobotArmAction("RobotArm"),
-        NavigationAction("Navigation"),
-        LLMDialogAction("LLMDialog", config=config),
-        BackToWakeUp("BackToWakeUp"),
-        DefaultResponse("DefaultResponse"),
-    ])
-
-    # === 2. DialogLoop: 单轮对话流程 ===
-    # memory=False: 每轮对话结束后自动重置，从 Listen 重新开始
-    # DialogContinueGuard 放在末尾：当 intent == "exit" 时返回 FAILURE，
-    # 使 DialogLoop 整体 FAILURE → SuccessIsRunning 透传 → Root FAILURE → 回到唤醒
     dialog_loop = py_trees.composites.Sequence(
         name="DialogLoop", memory=False
     )
-    dialog_loop.add_children([
-        ListenCommand("Listen", engine),
-        RecognizeIntent("Intent", config=config),
-        action_selector,
-        SpeakResponse("Speak", engine),
-        DialogContinueGuard("ContinueGuard"),
-    ])
+
+    if config.use_llm_planner:
+        # === LLM 规划器模式: 支持一句话多指令 ===
+        dialog_loop.add_children([
+            ListenCommand("Listen", engine),
+            LLMTaskPlanner("Planner", config=config),
+            PlanExecutor("Executor", config=config),
+            SpeakResponse("Speak", engine),
+            DialogContinueGuard("ContinueGuard"),
+        ])
+    else:
+        # === 关键词匹配模式 (原有行为) ===
+        action_selector = py_trees.composites.Selector(
+            name="ActionSelector", memory=False
+        )
+        action_selector.add_children([
+            TakePhotoAction("TakePhoto", config=config),
+            RecordVideoAction("RecordVideo", config=config),
+            RobotArmAction("RobotArm"),
+            NavigationAction("Navigation"),
+            LLMDialogAction("LLMDialog", config=config),
+            BackToWakeUp("BackToWakeUp"),
+            DefaultResponse("DefaultResponse"),
+        ])
+        dialog_loop.add_children([
+            ListenCommand("Listen", engine),
+            RecognizeIntent("Intent", config=config),
+            action_selector,
+            SpeakResponse("Speak", engine),
+            DialogContinueGuard("ContinueGuard"),
+        ])
 
     # === 3. DialogRepeat: 无限循环对话 ===
     # SuccessIsRunning 装饰器: 将 DialogLoop 的 SUCCESS 映射为 RUNNING，
@@ -146,6 +168,8 @@ def main():
         print(f"  麦克风阵列: {config.hw_mic_array}")
     print(f"  TTS 音色 ID: {config.tts_speaker_id}")
     print(f"  LLM 模型: {config.llm_model}")
+    mode_label = "LLM 多指令规划" if config.use_llm_planner else "关键词匹配"
+    print(f"  意图模式: {mode_label}")
     print(f"  对话超时: {config.dialog_timeout}s")
     print()
 

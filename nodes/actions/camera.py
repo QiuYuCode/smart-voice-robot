@@ -1,5 +1,8 @@
 """相机动作节点 - 拍照 & 录制视频"""
 
+from __future__ import annotations
+
+import logging
 import platform
 import time
 from datetime import datetime
@@ -16,9 +19,11 @@ try:
 except ImportError:  # pragma: no cover
     cv2 = None
 
+logger = logging.getLogger(__name__)
+
 
 # ============================================================================
-# 工具函数
+# 内部工具函数
 # ============================================================================
 
 def _preferred_backend():
@@ -51,7 +56,7 @@ def _open_camera(camera_index: int, width: int, height: int):
     return cap
 
 
-def _warmup_and_grab(cap, warmup_frames: int = 5):
+def _warmup_and_grab(cap, warmup_frames: int = 30):
     """
     跳过前几帧(曝光预热)，返回稳定帧。
 
@@ -63,7 +68,6 @@ def _warmup_and_grab(cap, warmup_frames: int = 5):
         ok, frame = cap.read()
     if frame is not None:
         return frame
-    # 再尝试一次
     ok, frame = cap.read()
     return frame if ok else None
 
@@ -81,7 +85,87 @@ def _timestamp() -> str:
 
 
 # ============================================================================
-# 拍照动作
+# 独立执行函数 (供 Behaviour 节点和 planner tool 共同调用)
+# ============================================================================
+
+def execute_take_photo(config: RobotConfig) -> str:
+    """拍照核心逻辑。成功返回结果描述，失败抛出 RuntimeError。"""
+    if cv2 is None:
+        raise RuntimeError("相机依赖缺失，请先安装 opencv-python。")
+
+    cap = _open_camera(config.camera_index, config.camera_width, config.camera_height)
+    if cap is None:
+        raise RuntimeError("相机打开失败，请检查设备连接。")
+
+    try:
+        frame = _warmup_and_grab(cap)
+        if frame is None:
+            raise RuntimeError("相机无画面输出，请稍后再试。")
+
+        save_dir = _ensure_save_dir(config.camera_save_dir)
+        filename = f"photo_{_timestamp()}.jpg"
+        filepath = save_dir / filename
+        cv2.imwrite(str(filepath), frame)
+
+        logger.info("照片已保存: %s", filepath)
+        return "拍照成功，照片已保存。"
+    finally:
+        cap.release()
+
+
+def execute_record_video(config: RobotConfig, duration: float | None = None) -> str:
+    """录制视频核心逻辑。成功返回结果描述，失败抛出 RuntimeError。"""
+    if cv2 is None:
+        raise RuntimeError("相机依赖缺失，请先安装 opencv-python。")
+
+    cap = _open_camera(config.camera_index, config.camera_width, config.camera_height)
+    if cap is None:
+        raise RuntimeError("相机打开失败，请检查设备连接。")
+
+    if duration is None:
+        duration = config.camera_record_seconds
+
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            fps = config.camera_record_fps
+
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        save_dir = _ensure_save_dir(config.camera_save_dir)
+        filename = f"video_{_timestamp()}.mp4"
+        filepath = save_dir / filename
+
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(str(filepath), fourcc, fps, (w, h))
+
+        if not writer.isOpened():
+            raise RuntimeError("视频录制初始化失败。")
+
+        logger.info("开始录制: %.0fs, %dx%d@%.0ffps", duration, w, h, fps)
+
+        for _ in range(30):
+            cap.read()
+
+        start = time.monotonic()
+        while time.monotonic() - start < duration:
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                break
+            writer.write(frame)
+
+        writer.release()
+        elapsed = time.monotonic() - start
+
+        logger.info("视频已保存: %s (%.1fs)", filepath, elapsed)
+        return f"视频录制完成，共 {elapsed:.0f} 秒，已保存。"
+    finally:
+        cap.release()
+
+
+# ============================================================================
+# 拍照动作 (行为树节点)
 # ============================================================================
 
 class TakePhotoAction(Behaviour):
@@ -110,41 +194,17 @@ class TakePhotoAction(Behaviour):
             return Status.FAILURE
 
         self.logger.info("执行: 拍照")
-
-        if cv2 is None:
-            self.logger.error("opencv-python 未安装。")
-            self.blackboard.response_text = "相机依赖缺失，请先安装 opencv-python。"
-            return Status.FAILURE
-
-        cfg = self._config
-        cap = _open_camera(cfg.camera_index, cfg.camera_width, cfg.camera_height)
-        if cap is None:
-            self.logger.error("无法打开相机。")
-            self.blackboard.response_text = "相机打开失败，请检查设备连接。"
-            return Status.FAILURE
-
         try:
-            frame = _warmup_and_grab(cap)
-            if frame is None:
-                self.logger.error("相机没有返回画面。")
-                self.blackboard.response_text = "相机无画面输出，请稍后再试。"
-                return Status.FAILURE
-
-            save_dir = _ensure_save_dir(cfg.camera_save_dir)
-            filename = f"photo_{_timestamp()}.jpg"
-            filepath = save_dir / filename
-            cv2.imwrite(str(filepath), frame)
-
-            self.logger.info(f"照片已保存: {filepath}")
-            self.blackboard.response_text = f"拍照成功，照片已保存。"
+            self.blackboard.response_text = execute_take_photo(self._config)
             return Status.SUCCESS
-
-        finally:
-            cap.release()
+        except RuntimeError as e:
+            self.logger.error(str(e))
+            self.blackboard.response_text = str(e)
+            return Status.FAILURE
 
 
 # ============================================================================
-# 录制视频动作
+# 录制视频动作 (行为树节点)
 # ============================================================================
 
 class RecordVideoAction(Behaviour):
@@ -174,66 +234,10 @@ class RecordVideoAction(Behaviour):
             return Status.FAILURE
 
         self.logger.info("执行: 录制视频")
-
-        if cv2 is None:
-            self.logger.error("opencv-python 未安装。")
-            self.blackboard.response_text = "相机依赖缺失，请先安装 opencv-python。"
-            return Status.FAILURE
-
-        cfg = self._config
-        cap = _open_camera(cfg.camera_index, cfg.camera_width, cfg.camera_height)
-        if cap is None:
-            self.logger.error("无法打开相机。")
-            self.blackboard.response_text = "相机打开失败，请检查设备连接。"
-            return Status.FAILURE
-
         try:
-            # 获取实际帧率, 拿不到则用默认值
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            if fps <= 0:
-                fps = cfg.camera_record_fps
-
-            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-            save_dir = _ensure_save_dir(cfg.camera_save_dir)
-            filename = f"video_{_timestamp()}.mp4"
-            filepath = save_dir / filename
-
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            writer = cv2.VideoWriter(str(filepath), fourcc, fps, (w, h))
-
-            if not writer.isOpened():
-                self.logger.error("无法创建视频写入器。")
-                self.blackboard.response_text = "视频录制初始化失败。"
-                return Status.FAILURE
-
-            self.logger.info(
-                f"开始录制: {cfg.camera_record_seconds}s, "
-                f"{w}x{h}@{fps:.0f}fps"
-            )
-
-            # 先跳过几帧做曝光预热
-            for _ in range(30):
-                cap.read()
-
-            duration = cfg.camera_record_seconds
-            start = time.monotonic()
-
-            while time.monotonic() - start < duration:
-                ok, frame = cap.read()
-                if not ok or frame is None:
-                    break
-                writer.write(frame)
-
-            writer.release()
-            elapsed = time.monotonic() - start
-
-            self.logger.info(f"视频已保存: {filepath} ({elapsed:.1f}s)")
-            self.blackboard.response_text = (
-                f"视频录制完成，共 {elapsed:.0f} 秒，已保存。"
-            )
+            self.blackboard.response_text = execute_record_video(self._config)
             return Status.SUCCESS
-
-        finally:
-            cap.release()
+        except RuntimeError as e:
+            self.logger.error(str(e))
+            self.blackboard.response_text = str(e)
+            return Status.FAILURE

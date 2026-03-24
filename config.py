@@ -94,6 +94,17 @@ class RobotConfig:
     llm_system_prompt: str = "你是一个机器人助手，请用简短的中文回答用户的问题, 不要输出 emoji 表情和其他任何表情符号。"
     llm_max_history: int = 10  # 保留最近 N 轮对话历史
 
+    # --- 任务规划器 (LLM Function Calling) ---
+    # True 时使用 LLM 解析多步指令，False 时使用关键词匹配（原有行为）
+    use_llm_planner: bool = False
+    planner_system_prompt: str = (
+        "你是一个机器人任务规划器。根据用户的自然语言指令，调用合适的工具来完成任务。\n"
+        "规则：\n"
+        "1. 如果用户给出多个指令，请按顺序调用多个工具。\n"
+        "2. 如果用户只是闲聊或提问，直接用简短中文回复，不要调用任何工具。\n"
+        "3. 不要输出 emoji 表情和其他任何表情符号。\n"
+    )
+
     # --- 意图关键词映射 ---
     # key: 意图名称, value: 触发该意图的关键词列表
     intent_patterns: dict[str, list[str]] = field(default_factory=lambda: {

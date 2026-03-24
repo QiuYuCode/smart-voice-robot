@@ -1,9 +1,33 @@
 """机械臂控制动作节点"""
 
+from __future__ import annotations
+
+import logging
+
 import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# 独立执行函数 (供 Behaviour 节点和 planner tool 共同调用)
+# ============================================================================
+
+def execute_robot_arm(action: str) -> str:
+    """机械臂控制核心逻辑。返回执行结果描述。
+
+    TODO: 通过串口 / ROS service / GPIO 等方式控制
+    """
+    logger.info("执行机械臂控制: %s", action)
+    # TODO: 实际机械臂控制实现
+    return f"机械臂指令已发送: {action}。"
+
+
+# ============================================================================
+# 机械臂动作 (行为树节点)
+# ============================================================================
 
 class RobotArmAction(Behaviour):
     """
@@ -34,12 +58,5 @@ class RobotArmAction(Behaviour):
 
         command = self.blackboard.user_command
         self.logger.info(f"执行: 机械臂控制 ({command})")
-
-        # TODO: 实际机械臂控制逻辑
-        # 通过串口 / ROS service / GPIO 等方式控制
-        # import serial
-        # ser = serial.Serial('/dev/ttyUSB0', 115200)
-        # ser.write(b'move ...')
-
-        self.blackboard.response_text = "机械臂指令已发送。"
+        self.blackboard.response_text = execute_robot_arm(command)
         return Status.SUCCESS

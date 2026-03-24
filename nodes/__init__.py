@@ -6,6 +6,8 @@ from nodes.listen import ListenCommand
 from nodes.intent import RecognizeIntent
 from nodes.speak import SpeakResponse, WakeupResponse
 from nodes.guards import DialogContinueGuard
+from nodes.planner import LLMTaskPlanner
+from nodes.plan_executor import PlanExecutor
 from nodes.actions import (
     TakePhotoAction,
     RecordVideoAction,
@@ -24,6 +26,8 @@ __all__ = [
     "SpeakResponse",
     "WakeupResponse",
     "DialogContinueGuard",
+    "LLMTaskPlanner",
+    "PlanExecutor",
     "TakePhotoAction",
     "RecordVideoAction",
     "RobotArmAction",

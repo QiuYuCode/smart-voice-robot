@@ -1,9 +1,33 @@
 """ROS 导航动作节点"""
 
+from __future__ import annotations
+
+import logging
+
 import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# 独立执行函数 (供 Behaviour 节点和 planner tool 共同调用)
+# ============================================================================
+
+def execute_navigate(destination: str) -> str:
+    """导航核心逻辑。返回执行结果描述。
+
+    TODO: 通过 ROS topic / service / action 发布导航目标
+    """
+    logger.info("执行导航: %s", destination)
+    # TODO: 实际 ROS 导航实现
+    return f"好的，正在前往{destination}。"
+
+
+# ============================================================================
+# 导航动作 (行为树节点)
+# ============================================================================
 
 class NavigationAction(Behaviour):
     """
@@ -35,26 +59,5 @@ class NavigationAction(Behaviour):
 
         command = self.blackboard.user_command
         self.logger.info(f"执行: 导航 ({command})")
-
-        # TODO: 通过 ROS topic / service / action 发布导航目标
-        #
-        # ROS 2 示例 (rclpy):
-        #   import rclpy
-        #   from geometry_msgs.msg import PoseStamped
-        #   from nav2_simple_commander.robot_navigator import BasicNavigator
-        #
-        #   navigator = BasicNavigator()
-        #   goal_pose = PoseStamped()
-        #   goal_pose.header.frame_id = 'map'
-        #   goal_pose.pose.position.x = 1.0
-        #   goal_pose.pose.position.y = 2.0
-        #   navigator.goToPose(goal_pose)
-        #
-        # rosbridge 示例:
-        #   import roslibpy
-        #   client = roslibpy.Ros(host='localhost', port=9090)
-        #   publisher = roslibpy.Topic(client, '/goal_pose', 'geometry_msgs/PoseStamped')
-        #   publisher.publish(roslibpy.Message({...}))
-
-        self.blackboard.response_text = "好的，正在为您导航。"
+        self.blackboard.response_text = execute_navigate(command)
         return Status.SUCCESS

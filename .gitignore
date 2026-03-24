@@ -247,3 +247,4 @@ AMENT_IGNORE
 .claude/
 .cursor/
 captures/
+.github/

@@ -21,8 +21,8 @@ ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02
 # sherpa-onnx 关键词检测
 KWS_DIR = MODELS_BASE / "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
 
-# sherpa-onnx VITS MeloTTS (中英双语, 单说话人)
-TTS_DIR = MODELS_BASE / "vits-melo-tts-zh_en"
+# sherpa-onnx VITS TTS (aishell3, 174 说话人)
+TTS_DIR = MODELS_BASE / "vits-zh-aishell3"
 
 # Silero VAD 模型
 VAD_DIR = MODELS_BASE / "silero_vad.onnx"
@@ -62,11 +62,11 @@ class RobotConfig:
     kws_num_trailing_blanks: int = 1
 
     # --- TTS 音色 ---
-    # MeloTTS zh_en 模型只有 1 个说话人 (sid=0)
-    tts_speaker_id: int = 0
+    # aishell3 模型支持 sid 0-173，共 174 种音色
+    tts_speaker_id: int = 99
     tts_speed: float = 1.0
     tts_max_chars_per_chunk: int = 80
-    tts_sentence_pause: float = 0.40
+    tts_sentence_pause: float = 0.35
     tts_clause_pause: float = 0.05
 
     # --- VAD (语音活动检测) ---

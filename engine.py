@@ -72,15 +72,14 @@ class VoiceEngine:
             enable_endpoint_detection=True,
         )
 
-        # 3. TTS (语音合成 - MeloTTS 中英双语)
+        # 3. TTS (语音合成)
         self.tts = sherpa_onnx.OfflineTts(
             config=sherpa_onnx.OfflineTtsConfig(
                 model=sherpa_onnx.OfflineTtsModelConfig(
                     vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=f"{TTS_DIR}/model.onnx",
+                        model=f"{TTS_DIR}/vits-aishell3.onnx",
                         lexicon=f"{TTS_DIR}/lexicon.txt",
                         tokens=f"{TTS_DIR}/tokens.txt",
-                        dict_dir=f"{TTS_DIR}/dict",
                     ),
                     num_threads=config.num_threads,
                 )

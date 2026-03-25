@@ -21,8 +21,8 @@ ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02
 # sherpa-onnx 关键词检测
 KWS_DIR = MODELS_BASE / "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
 
-# sherpa-onnx VITS TTS (aishell3, 174 说话人)
-TTS_DIR = MODELS_BASE / "vits-zh-aishell3"
+# sherpa-onnx VITS MeloTTS (中英双语, 单说话人)
+TTS_DIR = MODELS_BASE / "vits-melo-tts-zh_en"
 
 # Silero VAD 模型
 VAD_DIR = MODELS_BASE / "silero_vad.onnx"
@@ -62,11 +62,12 @@ class RobotConfig:
     kws_num_trailing_blanks: int = 1
 
     # --- TTS 音色 ---
-    # aishell3 模型支持 sid 0-173，共 174 种音色
-    tts_speaker_id: int = 21
+    # MeloTTS zh_en 模型只有 1 个说话人 (sid=0)
+    tts_speaker_id: int = 0
     tts_speed: float = 1.0
-    tts_max_chars_per_chunk: int = 120
-    tts_pause_seconds: float = 0.15
+    tts_max_chars_per_chunk: int = 80
+    tts_sentence_pause: float = 0.40
+    tts_clause_pause: float = 0.05
 
     # --- VAD (语音活动检测) ---
     vad_threshold: float = 0.5
@@ -91,7 +92,14 @@ class RobotConfig:
     llm_model: str = "qwen2.5:3b"
     llm_base_url: str = "http://localhost:11434"
     llm_api_key: str = ""  # 在线模型的 API Key (ollama 不需要)
-    llm_system_prompt: str = "你是一个机器人助手，请用简短的中文回答用户的问题, 不要输出 emoji 表情和其他任何表情符号。"
+    llm_system_prompt: str = (
+        "你是一个机器人语音助手。回答要求：\n"
+        "1. 用简短自然的口语化中文回答，像人在说话一样。\n"
+        "2. 善用逗号断句，避免一口气说完长句子。\n"
+        "3. 禁止输出 emoji、表情符号、括号注释、markdown 格式。\n"
+        "4. 禁止输出列表编号，改用自然语言衔接，比如用首先、然后、最后。\n"
+        "5. 数字用中文读法，比如三百二十，而非320。\n"
+    )
     llm_max_history: int = 10  # 保留最近 N 轮对话历史
 
     # --- 任务规划器 (LLM Function Calling) ---

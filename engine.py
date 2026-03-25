@@ -72,14 +72,15 @@ class VoiceEngine:
             enable_endpoint_detection=True,
         )
 
-        # 3. TTS (语音合成)
+        # 3. TTS (语音合成 - MeloTTS 中英双语)
         self.tts = sherpa_onnx.OfflineTts(
             config=sherpa_onnx.OfflineTtsConfig(
                 model=sherpa_onnx.OfflineTtsModelConfig(
                     vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=f"{TTS_DIR}/vits-aishell3.onnx",
+                        model=f"{TTS_DIR}/model.onnx",
                         lexicon=f"{TTS_DIR}/lexicon.txt",
                         tokens=f"{TTS_DIR}/tokens.txt",
+                        dict_dir=f"{TTS_DIR}/dict",
                     ),
                     num_threads=config.num_threads,
                 )
@@ -141,67 +142,88 @@ class VoiceEngine:
     # TTS
     # ------------------------------------------------------------------
 
-    def _split_tts_text(self, text: str) -> list[str]:
+    # 句子终止符 → 长停顿；从句/逗号 → 短停顿
+    _SENTENCE_END = set("。！？.!?\n")
+    _CLAUSE_SEP = set(",，;；:：、—")
+
+    def _split_tts_segments(self, text: str) -> list[tuple[str, str]]:
+        """
+        将文本按标点拆分为 (片段, 停顿类型) 列表。
+        停顿类型: "sentence" | "clause" | "none"
+        """
         cleaned = " ".join(text.strip().split())
         if not cleaned:
             return []
-        max_len = self.config.tts_max_chars_per_chunk
-        if len(cleaned) <= max_len:
-            return [cleaned]
 
-        # 先按常见句子分隔符切分
-        separators = "。！？.!?;；\n"
-        sentences: list[str] = []
-        buf = []
+        max_len = self.config.tts_max_chars_per_chunk
+        segments: list[tuple[str, str]] = []
+        buf: list[str] = []
+
         for ch in cleaned:
             buf.append(ch)
-            if ch in separators:
-                sentence = "".join(buf).strip()
-                if sentence:
-                    sentences.append(sentence)
+            if ch in self._SENTENCE_END:
+                seg = "".join(buf).strip()
+                if seg:
+                    segments.append((seg, "sentence"))
                 buf = []
-        if buf:
-            sentence = "".join(buf).strip()
-            if sentence:
-                sentences.append(sentence)
+            elif ch in self._CLAUSE_SEP:
+                seg = "".join(buf).strip()
+                if seg:
+                    segments.append((seg, "clause"))
+                buf = []
 
-        # 进一步按最大长度拆分
-        chunks: list[str] = []
-        for sentence in sentences:
-            if len(sentence) <= max_len:
-                chunks.append(sentence)
+        if buf:
+            seg = "".join(buf).strip()
+            if seg:
+                segments.append((seg, "none"))
+
+        # 对超长片段做二次拆分
+        result: list[tuple[str, str]] = []
+        for seg_text, pause_type in segments:
+            if len(seg_text) <= max_len:
+                result.append((seg_text, pause_type))
             else:
                 start = 0
-                while start < len(sentence):
-                    chunks.append(sentence[start : start + max_len])
+                while start < len(seg_text):
+                    chunk = seg_text[start : start + max_len]
                     start += max_len
-        return chunks
+                    p = pause_type if start >= len(seg_text) else "clause"
+                    result.append((chunk, p))
+        return result
 
     def generate_speech(self, text: str):
         """生成 TTS 音频 (不播放)，返回 (samples, sample_rate)"""
-        chunks = self._split_tts_text(text)
-        if not chunks:
+        segments = self._split_tts_segments(text)
+        if not segments:
             return np.array([], dtype=np.float32), SAMPLE_RATE
 
-        combined = []
+        combined: list[np.ndarray] = []
         sample_rate = None
-        pause_samples = None
+        sentence_pause = None
+        clause_pause = None
 
-        for chunk in chunks:
+        for seg_text, pause_type in segments:
             audio = self.tts.generate(
-                chunk,
+                seg_text,
                 sid=self.config.tts_speaker_id,
                 speed=self.config.tts_speed,
             )
             if sample_rate is None:
                 sample_rate = audio.sample_rate
-                pause_len = int(sample_rate * self.config.tts_pause_seconds)
-                pause_samples = np.zeros(pause_len, dtype=np.float32)
-            combined.append(np.asarray(audio.samples, dtype=np.float32))
-            combined.append(pause_samples)
+                sentence_pause = np.zeros(
+                    int(sample_rate * self.config.tts_sentence_pause), dtype=np.float32
+                )
+                clause_pause = np.zeros(
+                    int(sample_rate * self.config.tts_clause_pause), dtype=np.float32
+                )
 
-        if combined and pause_samples is not None:
-            combined = combined[:-1]
+            combined.append(np.asarray(audio.samples, dtype=np.float32))
+
+            if pause_type == "sentence":
+                combined.append(sentence_pause)
+            elif pause_type == "clause":
+                combined.append(clause_pause)
+
         if combined:
             return np.concatenate(combined), sample_rate
         return np.array([], dtype=np.float32), SAMPLE_RATE

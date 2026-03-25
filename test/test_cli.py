@@ -327,6 +327,13 @@ def parse_args():
     return parser.parse_args()
 
 
+_PROVIDER_DEFAULT_MODELS = {
+    "deepseek": "deepseek-chat",
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-sonnet-4-20250514",
+}
+
+
 def main():
     args = parse_args()
     config = default_config
@@ -335,6 +342,8 @@ def main():
         config.use_llm_planner = True
     if args.provider:
         config.llm_provider = args.provider
+        if not args.model and args.provider in _PROVIDER_DEFAULT_MODELS:
+            config.llm_model = _PROVIDER_DEFAULT_MODELS[args.provider]
     if args.model:
         config.llm_model = args.model
     if args.base_url:

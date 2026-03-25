@@ -681,7 +681,7 @@ class RobotConfig:
 
 ```bash
 # 启动语音助手 (默认: 软件唤醒 + 关键词匹配模式)
-uv run python main.py
+uv run main.py
 ```
 
 启动后系统进入待机状态，等待唤醒词。说出唤醒词后系统回应"我在，请说"，随后可以进行多轮对话：
@@ -704,19 +704,19 @@ uv run python main.py
 
 ```bash
 # 交互模式 (关键词匹配)
-uv run python test/test_cli.py
+uv run test/test_cli.py
 
 # 单次模式
-uv run python test/test_cli.py "帮我拍照"
+uv run test/test_cli.py "帮我拍照"
 
 # LLM 多指令规划模式
-uv run python test/test_cli.py --planner
+uv run test/test_cli.py --planner
 
 # 指定在线 LLM Provider
-uv run python test/test_cli.py --planner --provider deepseek --api-key sk-xxx
+uv run test/test_cli.py --planner --provider deepseek --api-key sk-xxx
 
 # 启用 TTS 语音播报
-uv run python test/test_cli.py --tts
+uv run test/test_cli.py --tts
 ```
 
 ---

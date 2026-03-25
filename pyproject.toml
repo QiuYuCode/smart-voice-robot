@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "langchain-core",
     "langchain-ollama",
+    "langchain-openai>=1.1.8",
     "numpy",
     "ollama>=0.6.1",
     "opencv-python>=4.13.0.90",

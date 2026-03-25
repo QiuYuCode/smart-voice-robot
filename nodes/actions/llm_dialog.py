@@ -24,19 +24,27 @@ def _create_llm(config: RobotConfig):
     elif provider == "openai":
         from langchain_openai import ChatOpenAI
 
+        base_url = config.llm_base_url
+        if not base_url or "localhost" in base_url or "127.0.0.1" in base_url:
+            base_url = None
+
         return ChatOpenAI(
             model=config.llm_model,
             api_key=config.llm_api_key,
-            base_url=config.llm_base_url or None,
+            base_url=base_url,
         )
 
     elif provider == "deepseek":
         from langchain_openai import ChatOpenAI
 
+        base_url = config.llm_base_url
+        if not base_url or "localhost" in base_url or "127.0.0.1" in base_url:
+            base_url = "https://api.deepseek.com"
+
         return ChatOpenAI(
             model=config.llm_model,
             api_key=config.llm_api_key,
-            base_url=config.llm_base_url or "https://api.deepseek.com",
+            base_url=base_url,
         )
 
     elif provider == "anthropic":

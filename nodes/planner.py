@@ -51,11 +51,20 @@ def _build_planner_tools():
         return "control_robot_arm called"
 
     @tool
+    def describe_scene(question: str = "请描述你看到的场景") -> str:
+        """用相机拍照并分析画面内容。当用户要求看看、描述场景、识别物体时调用。
+
+        Args:
+            question: 用户想了解的具体问题，如"前面有什么"、"这是什么东西"。
+        """
+        return "describe_scene called"
+
+    @tool
     def exit_conversation() -> str:
         """结束当前对话，回到待机状态。当用户说退出、结束、没事了时调用。"""
         return "exit_conversation called"
 
-    return [take_photo, record_video, navigate, control_robot_arm, exit_conversation]
+    return [take_photo, record_video, navigate, control_robot_arm, describe_scene, exit_conversation]
 
 
 # ============================================================================

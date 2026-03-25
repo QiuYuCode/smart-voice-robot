@@ -11,6 +11,7 @@ from nodes.plan_executor import PlanExecutor
 from nodes.actions import (
     TakePhotoAction,
     RecordVideoAction,
+    DescribeSceneAction,
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
@@ -30,6 +31,7 @@ __all__ = [
     "PlanExecutor",
     "TakePhotoAction",
     "RecordVideoAction",
+    "DescribeSceneAction",
     "RobotArmAction",
     "NavigationAction",
     "LLMDialogAction",

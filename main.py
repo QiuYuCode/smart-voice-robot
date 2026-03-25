@@ -17,6 +17,7 @@
             ├── ListenCommand (流式 ASR + VAD 静默超时)
             ├── RecognizeIntent
             ├── ActionSelector (Selector)
+            │   ├── DescribeSceneAction (VLM 视觉理解)
             │   ├── TakePhotoAction
             │   ├── RecordVideoAction
             │   ├── RobotArmAction
@@ -65,6 +66,7 @@ from nodes import (
     DialogContinueGuard,
     TakePhotoAction,
     RecordVideoAction,
+    DescribeSceneAction,
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
@@ -103,6 +105,7 @@ def create_tree(
             name="ActionSelector", memory=False
         )
         action_selector.add_children([
+            DescribeSceneAction("DescribeScene", config=config),
             TakePhotoAction("TakePhoto", config=config),
             RecordVideoAction("RecordVideo", config=config),
             RobotArmAction("RobotArm"),

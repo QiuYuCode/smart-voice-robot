@@ -88,6 +88,48 @@ def _timestamp() -> str:
 # 独立执行函数 (供 Behaviour 节点和 planner tool 共同调用)
 # ============================================================================
 
+def capture_frame_as_base64(config: RobotConfig, save_copy: bool = True) -> tuple[str, str | None]:
+    """拍照并返回 base64 编码的 JPEG，可选同时存盘。
+
+    Returns:
+        (base64_str, filepath_or_none)
+
+    Raises:
+        RuntimeError: 相机不可用或无画面。
+    """
+    import base64
+
+    if cv2 is None:
+        raise RuntimeError("相机依赖缺失，请先安装 opencv-python。")
+
+    cap = _open_camera(config.camera_index, config.camera_width, config.camera_height)
+    if cap is None:
+        raise RuntimeError("相机打开失败，请检查设备连接。")
+
+    try:
+        frame = _warmup_and_grab(cap)
+        if frame is None:
+            raise RuntimeError("相机无画面输出，请稍后再试。")
+
+        ok, buf = cv2.imencode(".jpg", frame)
+        if not ok:
+            raise RuntimeError("JPEG 编码失败。")
+
+        b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+
+        filepath = None
+        if save_copy:
+            save_dir = _ensure_save_dir(config.camera_save_dir)
+            filename = f"photo_{_timestamp()}.jpg"
+            filepath = str(save_dir / filename)
+            cv2.imwrite(filepath, frame)
+            logger.info("视觉拍照已保存: %s", filepath)
+
+        return b64, filepath
+    finally:
+        cap.release()
+
+
 def execute_take_photo(config: RobotConfig) -> str:
     """拍照核心逻辑。成功返回结果描述，失败抛出 RuntimeError。"""
     if cv2 is None:

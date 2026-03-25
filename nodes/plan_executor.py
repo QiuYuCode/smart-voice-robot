@@ -10,6 +10,7 @@ from config import RobotConfig
 from nodes.actions.camera import execute_take_photo, execute_record_video
 from nodes.actions.navigation import execute_navigate
 from nodes.actions.robot_arm import execute_robot_arm
+from nodes.actions.vision import execute_describe_scene
 
 
 class PlanExecutor(Behaviour):
@@ -59,6 +60,10 @@ class PlanExecutor(Behaviour):
         if name == "control_robot_arm":
             action = args.get("action", "未知动作")
             return execute_robot_arm(action)
+
+        if name == "describe_scene":
+            question = args.get("question", "请描述你看到的场景")
+            return execute_describe_scene(self._config, question)
 
         if name == "exit_conversation":
             return "好的，我先休息了。"

@@ -34,6 +34,7 @@ from nodes.plan_executor import PlanExecutor
 from nodes.actions import (
     TakePhotoAction,
     RecordVideoAction,
+    DescribeSceneAction,
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
@@ -194,6 +195,7 @@ def create_test_tree(
             name="ActionSelector", memory=False
         )
         action_selector.add_children([
+            DescribeSceneAction("DescribeScene", config=config),
             TakePhotoAction("TakePhoto", config=config),
             RecordVideoAction("RecordVideo", config=config),
             RobotArmAction("RobotArm"),

@@ -89,7 +89,7 @@ class RobotConfig:
     # --- LLM ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
     llm_provider: str = "ollama"
-    llm_model: str = "qwen2.5:3b"
+    llm_model: str = "qwen3.5:4b"
     llm_base_url: str = "http://localhost:11434"
     llm_api_key: str = ""  # 在线模型的 API Key (ollama 不需要)
     llm_system_prompt: str = (
@@ -101,6 +101,18 @@ class RobotConfig:
         "5. 数字用中文读法，比如三百二十，而非320。\n"
     )
     llm_max_history: int = 10  # 保留最近 N 轮对话历史
+
+    # --- VLM (视觉语言模型) ---
+    # provider: "ollama" | "openai" | "deepseek" | "anthropic"
+    vlm_provider: str = "ollama"
+    vlm_model: str = "qwen3.5:4b"
+    vlm_base_url: str = "http://localhost:11434"
+    vlm_api_key: str = ""
+    vlm_system_prompt: str = (
+        "你是一个机器人的视觉系统。根据图片内容，用简短自然的中文描述你看到的场景。\n"
+        "用第一人称：我"
+        "禁止输出 emoji、表情符号、markdown 格式。\n"
+    )
 
     # --- 任务规划器 (LLM Function Calling) ---
     # True 时使用 LLM 解析多步指令，False 时使用关键词匹配（原有行为）
@@ -116,7 +128,8 @@ class RobotConfig:
     # --- 意图关键词映射 ---
     # key: 意图名称, value: 触发该意图的关键词列表
     intent_patterns: dict[str, list[str]] = field(default_factory=lambda: {
-        "take_photo": ["拍照", "拍张照", "拍个照", "拍一张", "照片", "看一下"],
+        "describe_scene": ["看一下", "看看", "这是什么", "前面有什么", "描述一下", "看到了什么"],
+        "take_photo": ["拍照", "拍张照", "拍个照", "拍一张", "照片"],
         "record_video": ["录像", "录制视频", "录视频", "录一段", "摄像"],
         "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
         "navigation": ["导航", "前往", "去", "带我去"],

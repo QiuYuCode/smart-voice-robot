@@ -176,6 +176,9 @@ def main():
     print(f"  对话超时: {config.dialog_timeout}s")
     print()
 
+    if config.startup_sound_enabled:
+        engine.speak_blocking(config.startup_sound_text)
+
     try:
         while True:
             tree.tick()

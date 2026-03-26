@@ -89,7 +89,7 @@ class RobotConfig:
     # --- LLM ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
     llm_provider: str = "ollama"
-    llm_model: str = "qwen3.5:4b"
+    llm_model: str = "qwen3.5:0.8b"
     llm_base_url: str = "http://localhost:11434"
     llm_api_key: str = ""  # 在线模型的 API Key (ollama 不需要)
     llm_system_prompt: str = (
@@ -105,7 +105,7 @@ class RobotConfig:
     # --- VLM (视觉语言模型) ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
     vlm_provider: str = "ollama"
-    vlm_model: str = "qwen3.5:4b"
+    vlm_model: str = "qwen3.5:0.8b"
     vlm_base_url: str = "http://localhost:11434"
     vlm_api_key: str = ""
     vlm_system_prompt: str = (
@@ -133,7 +133,7 @@ class RobotConfig:
         "record_video": ["录像", "录制视频", "录视频", "录一段", "摄像"],
         "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
         "navigation": ["导航", "前往", "去", "带我去"],
-        "exit": ["退出", "结束", "停止", "没事了"],
+        "exit": ["退出", "结束", "停止", "没事了", "拜拜", "退下吧"],
     })
 
     # --- TTS 响应模板 ---
@@ -142,9 +142,14 @@ class RobotConfig:
         "timeout": "没有听到您的命令，有需要可以再叫我。",
     })
 
+    # --- 启动提示音 ---
+    startup_sound_enabled: bool = True
+    startup_sound_text: str = "系统启动完成"
+
     # --- 系统 ---
     tick_interval: float = 0.05  # 主循环心跳间隔 (秒)
     num_threads: int = 2  # 模型推理线程数
+    onnx_provider: str = "cuda"  # ONNX 推理设备: "cuda" | "cpu"
     verbose: bool = True
 
 

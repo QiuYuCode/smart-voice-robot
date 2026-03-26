@@ -14,6 +14,7 @@
 - [Blackboard 数据共享](#blackboard-数据共享)
 - [项目结构](#项目结构)
 - [依赖与安装](#依赖与安装)
+- [sherpa-onnx GPU 编译（可选）](#sherpa-onnx-gpu-编译可选)
 - [配置说明](#配置说明)
 - [运行](#运行)
 - [CLI 测试工具](#cli-测试工具)
@@ -567,6 +568,9 @@ cd smart-voice-robot
 # 使用 uv 安装依赖
 uv sync
 
+# 若 pyproject.toml 将 sherpa-onnx 指到本地源码（GPU 版），请先按下文
+# [sherpa-onnx GPU 编译（可选）](#sherpa-onnx-gpu-编译可选) 完成编译再 uv sync。
+
 # 安装在线 LLM 支持 (可选)
 uv sync --extra openai       # OpenAI / DeepSeek
 uv sync --extra anthropic    # Anthropic
@@ -581,8 +585,7 @@ ollama pull qwen2.5:3b
 | 包 | 版本 | 用途 |
 |---|---|---|
 | `py-trees` | >= 2.4.0 | 行为树框架 |
-| `sherpa-onnx` | >= 1.12.23 | KWS / ASR / TTS 推理引擎 |
-| `sherpa-onnx-bin` | >= 1.12.23 | sherpa-onnx 预编译二进制 |
+| `sherpa-onnx` | 见 `pyproject.toml` / `[tool.uv.sources]` | KWS / ASR / TTS 推理引擎（可来自 PyPI CPU 版或本地 GPU 源码构建） |
 | `sounddevice` | >= 0.5.5 | 音频采集与播放 |
 | `numpy` | latest | 音频数据处理 |
 | `langchain-ollama` | latest | Ollama LLM 接口 |
@@ -598,6 +601,47 @@ ollama pull qwen2.5:3b
 | `openai` | `langchain-openai` | OpenAI / DeepSeek API |
 | `anthropic` | `langchain-anthropic` | Anthropic Claude API |
 | `online` | 上述全部 | 所有在线 LLM Provider |
+
+---
+
+## sherpa-onnx GPU 编译（可选）
+
+PyPI 上的 `sherpa-onnx` 通常只带 **CPU** 版 ONNX Runtime。若在 **NVIDIA Jetson（aarch64）** 等设备上希望 KWS / ASR / TTS 走 **CUDA**，需要从 [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) **源码编译**，并用 **uv** 将项目依赖指向本地构建结果。
+
+### 前置条件
+
+- 已安装 **CUDA Toolkit** 与 **cuDNN**（与板卡 JetPack / 驱动版本一致），`nvcc` 可用。
+- 能稳定访问 **GitHub**（CMake 会拉取子依赖；网络不稳时配置代理或预下载依赖后再编译）。
+- 本仓库的 `pyproject.toml` 中通过 `[tool.uv.sources]` 将 `sherpa-onnx` 指到与项目并列的源码目录时，请先克隆到例如 `../sherpa-onnx`（与 `path = "../sherpa-onnx"` 一致）。
+
+### 编译与安装（uv）
+
+在项目根目录执行（将路径按你的源码位置调整）：
+
+```bash
+# 可选：清理上次失败残留
+rm -rf /path/to/sherpa-onnx/build/
+
+cd smart-voice-robot
+
+# Jetson Orin + CUDA 12.x（与 sherpa-onnx cmake 说明一致时）使用 onnxruntime 1.18.1
+CUDA_HOME=/usr/local/cuda \
+SHERPA_ONNX_CMAKE_ARGS="-DSHERPA_ONNX_ENABLE_GPU=ON -DSHERPA_ONNX_LINUX_ARM64_GPU_ONNXRUNTIME_VERSION=1.18.1" \
+  uv add /path/to/sherpa-onnx
+```
+
+若未使用 `[tool.uv.sources]`，也可在一次性安装后把 `pyproject.toml` 改为 `sherpa-onnx = { path = "../sherpa-onnx" }` 并执行 `uv lock` / `uv sync`。
+
+编译成功时，安装包名类似 `sherpa-onnx==x.y.z+cuda`，虚拟环境内 `site-packages/sherpa_onnx/lib/` 下应出现 `libonnxruntime_providers_cuda.so`（以及可选的 TensorRT 相关 `.so`）。可用 `ldd` 检查该文件是否解析到系统的 `libcudart`、`libcudnn` 等。
+
+### 运行期配置
+
+在 `config.py` 的 `RobotConfig` 中设置：
+
+- `onnx_provider = "cuda"`：使用 CUDA 执行提供者（需已安装 GPU 版 sherpa-onnx）。
+- `onnx_provider = "cpu"`：强制 CPU（与 PyPI 默认轮子行为一致）。
+
+启动日志中会打印 `正在加载语音模型 (CUDA)...` 或 `(CPU)...`，便于确认当前后端。
 
 ---
 
@@ -673,6 +717,7 @@ class RobotConfig:
     # === 系统 ===
     tick_interval: float = 0.05         # 主循环 tick 间隔
     num_threads: int = 2                # 模型推理线程数
+    onnx_provider: str = "cuda"         # ONNX: "cuda" | "cpu"（GPU 需源码编译的 sherpa-onnx）
 ```
 
 ---

@@ -13,8 +13,7 @@ dependencies = [
     "opencv-python>=4.13.0.90",
     "py-trees>=2.4.0",
     "pyserial>=3.5",
-    "sherpa-onnx>=1.12.23",
-    "sherpa-onnx-bin>=1.12.23",
+    "sherpa-onnx",
     "sounddevice>=0.5.5",
 ]
 
@@ -27,3 +26,6 @@ online = ["langchain-openai", "langchain-anthropic"]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+[tool.uv.sources]
+sherpa-onnx = { path = "../sherpa-onnx" }

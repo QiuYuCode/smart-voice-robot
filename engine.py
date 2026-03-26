@@ -29,7 +29,7 @@ class VoiceEngine:
 
     def __init__(self, config: RobotConfig):
         self.config = config
-        print("正在加载语音模型 (CPU)...")
+        print(f"正在加载语音模型 ({config.onnx_provider.upper()})...")
 
         # 音频队列
         self.dialog_audio_queue: queue.Queue = queue.Queue()
@@ -53,6 +53,7 @@ class VoiceEngine:
                 num_trailing_blanks=config.kws_num_trailing_blanks,
                 num_threads=config.num_threads,
                 sample_rate=SAMPLE_RATE,
+                provider=config.onnx_provider,
             )
         elif config.wake_mode == "hardware":
             from rk3328 import RK3328Driver
@@ -70,6 +71,7 @@ class VoiceEngine:
             num_threads=config.num_threads,
             sample_rate=SAMPLE_RATE,
             enable_endpoint_detection=True,
+            provider=config.onnx_provider,
         )
 
         # 3. TTS (语音合成)
@@ -82,6 +84,7 @@ class VoiceEngine:
                         tokens=f"{TTS_DIR}/tokens.txt",
                     ),
                     num_threads=config.num_threads,
+                    provider=config.onnx_provider,
                 )
             )
         )

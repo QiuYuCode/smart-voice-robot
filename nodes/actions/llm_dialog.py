@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
@@ -124,7 +125,9 @@ class LLMDialogAction(Behaviour):
                 HumanMessage(content=command),
             ]
 
-            response = self.llm.invoke(messages)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(self.llm.invoke, messages)
+                response = future.result(timeout=self.config.llm_request_timeout)
 
             # 更新对话历史
             self.conversation_history.append(HumanMessage(content=command))
@@ -137,6 +140,17 @@ class LLMDialogAction(Behaviour):
 
             self.blackboard.response_text = response.content
 
+        except concurrent.futures.TimeoutError:
+            self.logger.error(
+                f"LLM 调用超时 ({self.config.llm_request_timeout}s): "
+                f"provider={self.config.llm_provider}, model={self.config.llm_model}"
+            )
+            self.blackboard.response_text = "我刚才走神了，麻烦您再说一次。"
+            # 某些 provider 在超时后连接可能进入异常状态，重建实例以提高后续成功率
+            try:
+                self.llm = _create_llm(self.config)
+            except Exception as rebuild_err:
+                self.logger.warning(f"LLM 重建失败: {rebuild_err}")
         except Exception as e:
             self.logger.error(f"LLM 调用失败: {e}")
             self.blackboard.response_text = "抱歉，我暂时无法回答。"

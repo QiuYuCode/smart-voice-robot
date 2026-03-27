@@ -95,7 +95,7 @@ class RobotConfig:
     # --- LLM ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
     llm_provider: str = "ollama"
-    llm_model: str = "qwen3.5:0.8b"
+    llm_model: str = "qwen2.5:3b"
     llm_base_url: str = "http://localhost:11434"
     llm_api_key: str = ""  # 在线模型的 API Key (ollama 不需要)
     llm_system_prompt: str = (
@@ -107,6 +107,7 @@ class RobotConfig:
         "5. 数字用中文读法，比如三百二十，而非320。\n"
     )
     llm_max_history: int = 10  # 保留最近 N 轮对话历史
+    llm_request_timeout: float = 12.0  # 单次 LLM 请求超时(秒)
 
     # --- VLM (视觉语言模型) ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
@@ -122,7 +123,7 @@ class RobotConfig:
 
     # --- 任务规划器 (LLM Function Calling) ---
     # True 时使用 LLM 解析多步指令，False 时使用关键词匹配（原有行为）
-    use_llm_planner: bool = False
+    use_llm_planner: bool = True
     planner_system_prompt: str = (
         "你是一个机器人任务规划器。根据用户的自然语言指令，调用合适的工具来完成任务。\n"
         "规则：\n"
@@ -136,7 +137,7 @@ class RobotConfig:
     intent_patterns: dict[str, list[str]] = field(default_factory=lambda: {
         "describe_scene": ["看一下", "看看", "这是什么", "前面有什么", "描述一下", "看到了什么"],
         "take_photo": ["拍照", "拍张照", "拍个照", "拍一张", "照片"],
-        "record_video": ["录像", "录制视频", "录视频", "录一段", "摄像"],
+        "record_video": ["录像", "录制视频", "录视频", "录一段", "摄像", "拍个视频", "拍视频"],
         "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
         "navigation": ["导航", "前往", "去", "带我去"],
         "exit": ["退出", "结束", "停止", "没事了", "拜拜", "退下吧"],
@@ -155,7 +156,7 @@ class RobotConfig:
     # --- 系统 ---
     tick_interval: float = 0.05  # 主循环心跳间隔 (秒)
     num_threads: int = 2  # 模型推理线程数
-    onnx_provider: str = "cuda"  # ONNX 推理设备: "cuda" | "cpu"
+    onnx_provider: str = "cpu"  # ONNX 推理设备: "cuda" | "cpu"
     verbose: bool = True
 
 

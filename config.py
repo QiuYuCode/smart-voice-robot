@@ -8,13 +8,19 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# 项目根目录
+base_dir = Path(__file__).parent
 
 # ============================================================================
 # 模型路径 (根据实际下载位置修改)
 # ============================================================================
 
-MODELS_BASE = Path("/home/nvidia/WorkSpace/models/voice_models")
+MODELS_BASE = base_dir / "model" / "voice_models"
 
+if not MODELS_BASE.exists():
+    MODELS_BASE.mkdir(parents=True, exist_ok=True)
+    print(f"模型目录不存在，已创建: {MODELS_BASE}")
+    
 # sherpa-onnx 流式 ASR
 ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
 

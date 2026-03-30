@@ -80,6 +80,12 @@ class RobotConfig:
     vad_min_silence_duration: float = 0.25
     vad_min_speech_duration: float = 0.25
 
+    # --- 音频设备选择 ---
+    # 优先按子串匹配设备名；为空则使用系统默认设备。
+    # 例如: "XFM-DP"、"C-Media"、"USB Audio"
+    input_device_hint: str = "XFM-DP"
+    output_device_hint: str = "C-Media"
+
     # --- 对话 ---
     dialog_timeout: float = 15.0  # 秒，无活动后超时回到 idle
     interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断

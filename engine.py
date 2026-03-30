@@ -104,6 +104,85 @@ class VoiceEngine:
 
         print("所有模型加载完成。")
 
+    def _configure_audio_devices(self):
+        """
+        根据配置中的设备名提示词自动选择输入/输出设备。
+        如果找不到匹配项，则回退到系统默认设备。
+        """
+        try:
+            devices = sd.query_devices()
+        except Exception as e:
+            print(f"[Audio] 查询设备失败，使用系统默认: {e}")
+            return
+
+        # 在 Linux + ALSA 后端下，sounddevice 常见到的稳定入口是 "pulse"。
+        # 优先绑定到 pulse，由 PulseAudio 负责路由到真实 USB 设备。
+        pulse_idx = None
+        for idx, dev in enumerate(devices):
+            name_l = str(dev.get("name", "")).lower().strip()
+            max_in = int(dev.get("max_input_channels", 0) or 0)
+            max_out = int(dev.get("max_output_channels", 0) or 0)
+            if name_l == "pulse" and max_in > 0 and max_out > 0:
+                pulse_idx = idx
+                break
+
+        if pulse_idx is not None:
+            sd.default.device = (pulse_idx, pulse_idx)
+            try:
+                pulse_name = sd.query_devices(pulse_idx)["name"]
+                print(f"[Audio] 输入设备: {pulse_name}")
+                print(f"[Audio] 输出设备: {pulse_name}")
+            except Exception:
+                pass
+            return
+
+        input_hint = (self.config.input_device_hint or "").strip().lower()
+        output_hint = (self.config.output_device_hint or "").strip().lower()
+
+        selected_input = None
+        selected_output = None
+
+        for idx, dev in enumerate(devices):
+            name = str(dev.get("name", ""))
+            name_l = name.lower()
+            max_in = int(dev.get("max_input_channels", 0) or 0)
+            max_out = int(dev.get("max_output_channels", 0) or 0)
+
+            if selected_input is None and input_hint and input_hint in name_l and max_in > 0:
+                selected_input = idx
+            if selected_output is None and output_hint and output_hint in name_l and max_out > 0:
+                selected_output = idx
+
+        # 未命中 hint 时，选择首个包含 usb 的输入/输出设备作为兜底
+        if selected_input is None:
+            for idx, dev in enumerate(devices):
+                name_l = str(dev.get("name", "")).lower()
+                max_in = int(dev.get("max_input_channels", 0) or 0)
+                if "usb" in name_l and max_in > 0:
+                    selected_input = idx
+                    break
+        if selected_output is None:
+            for idx, dev in enumerate(devices):
+                name_l = str(dev.get("name", "")).lower()
+                max_out = int(dev.get("max_output_channels", 0) or 0)
+                if "usb" in name_l and max_out > 0:
+                    selected_output = idx
+                    break
+
+        current_in, current_out = sd.default.device
+        sd.default.device = (
+            selected_input if selected_input is not None else current_in,
+            selected_output if selected_output is not None else current_out,
+        )
+
+        try:
+            in_name = sd.query_devices(sd.default.device[0])["name"]
+            out_name = sd.query_devices(sd.default.device[1])["name"]
+            print(f"[Audio] 输入设备: {in_name}")
+            print(f"[Audio] 输出设备: {out_name}")
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # 音频流
     # ------------------------------------------------------------------
@@ -117,6 +196,8 @@ class VoiceEngine:
 
     def start(self):
         """启动麦克风音频流和硬件驱动（如有）"""
+        self._configure_audio_devices()
+
         # 启动 RK3328 驱动（需在麦克风之前，确保握手响应及时）
         if self.rk3328_driver is not None:
             self.rk3328_driver.start()

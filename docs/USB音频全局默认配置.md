@@ -132,3 +132,61 @@ pulseaudio -k || true
 原因：USB 未插好、枚举变化或设备暂未被检测。  
 做法：重新插拔设备后，重新执行 `pactl list short sinks/sources` 获取实时名称。
 
+---
+
+### 故障 C：`pavucontrol` 卡在 “Establishing connection to PulseAudio…”
+
+表现：
+- `pavucontrol` 一直转圈
+- `pactl info`/`pactl list ...` 报 “拒绝连接”
+- `systemctl --user status pulseaudio.service` 显示 failed（可能还有 `start request repeated too quickly`）
+
+根因（常见）：
+- 清理 `~/.config/pulse/*-default-*.tdb` 或重启音频时，PulseAudio 被系统/进程残留卡住
+- 用户态 `pulseaudio.service` 失败并触发 systemd 的限速重启
+
+修复步骤（建议按顺序执行）：
+
+1) 停掉用户态 PulseAudio（避免反复拉起）
+```bash
+systemctl --user stop pulseaudio.service pulseaudio.socket || true
+systemctl --user reset-failed pulseaudio.service pulseaudio.socket || true
+```
+
+2) 杀掉残留进程 + 清理运行时目录
+```bash
+pulseaudio -k || true
+killall -9 pulseaudio 2>/dev/null || true
+rm -rf /run/user/$(id -u)/pulse
+```
+
+3) 重新启动（用 socket 激活更稳）
+```bash
+systemctl --user start pulseaudio.socket
+systemctl --user start pulseaudio.service || true
+```
+
+4) 验证
+```bash
+pactl info
+pactl list short sinks
+pactl list short sources
+```
+
+如果这一步仍失败：运行 `systemctl --user status pulseaudio.service` 查看日志信息，通常是配置文件/权限导致无法创建 pid/socket 文件。
+
+---
+
+### 故障 D：重启后输入设备仍需手动选择
+
+如果你重启后发现麦克风又回到旧设备，通常是用户态 PulseAudio “默认设备恢复”缓存还在生效。
+
+处理（只影响当前用户）：
+```bash
+rm -f ~/.config/pulse/*-default-sink.tdb ~/.config/pulse/*-default-source.tdb 2>/dev/null || true
+pulseaudio -k || true
+pulseaudio --start || true
+```
+
+然后再在 `pavucontrol` 里确认默认输入/输出是否变成你在 `/etc/pulse/default.pa.d/90-usb-audio-default.pa` 里写的那个。
+

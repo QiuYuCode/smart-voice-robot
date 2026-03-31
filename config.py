@@ -83,7 +83,7 @@ class RobotConfig:
     # --- ASR 后端 ---
     # "local": 本地 sherpa-onnx 流式识别
     # "iflytek_cloud": 讯飞云识别
-    asr_backend: str = "iflytek_cloud"
+    asr_backend: str = "local"
     # "streaming": 逐帧上传(40ms)；"endpoint_once": 端点后一次性上传
     cloud_asr_strategy: str = "streaming"
     cloud_asr_fallback_to_local: bool = True
@@ -148,10 +148,10 @@ class RobotConfig:
 
     # --- LLM ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
-    llm_provider: str = "ollama"
-    llm_model: str = "qwen2.5:3b"
+    llm_provider: str = "deepseek"
+    llm_model: str = "deepseek-reasoner"
     llm_base_url: str = "http://localhost:11434"
-    llm_api_key: str = ""  # 在线模型的 API Key (ollama 不需要)
+    llm_api_key: str = "" if llm_provider == "ollama" else _read_env("LLM_API_KEY") # 在线模型的 API Key (ollama 不需要)
     llm_system_prompt: str = (
         "你是一个机器人语音助手。回答要求：\n"
         "1. 用简短自然的口语化中文回答，像人在说话一样。\n"

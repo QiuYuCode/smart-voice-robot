@@ -83,7 +83,7 @@ class RobotConfig:
     # --- ASR 后端 ---
     # "local": 本地 sherpa-onnx 流式识别
     # "iflytek_cloud": 讯飞云识别
-    asr_backend: str = "local"
+    asr_backend: str = "iflytek_cloud"
     # "streaming": 逐帧上传(40ms)；"endpoint_once": 端点后一次性上传
     cloud_asr_strategy: str = "streaming"
     cloud_asr_fallback_to_local: bool = True
@@ -99,6 +99,7 @@ class RobotConfig:
     iflytek_iat_ptt: int = 1
     iflytek_iat_audio_format: str = "audio/L16;rate=16000"
     iflytek_iat_encoding: str = "raw"
+    cloud_asr_preroll_seconds: float = 0.3
 
     # --- TTS 音色 ---
     # aishell3 模型支持 sid 0-173，共 174 种音色

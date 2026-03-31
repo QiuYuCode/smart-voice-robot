@@ -101,8 +101,8 @@ def create_tree(
         # === LLM 规划器模式: 支持一句话多指令 ===
         dialog_loop.add_children([
             listen_node,
-            LLMTaskPlanner("Planner", config=config),
-            PlanExecutor("Executor", config=config),
+            LLMTaskPlanner("Planner", config=config, engine=engine),
+            PlanExecutor("Executor", config=config, engine=engine),
             SpeakResponse("Speak", engine),
             DialogContinueGuard("ContinueGuard"),
         ])

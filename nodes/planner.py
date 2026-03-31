@@ -80,9 +80,10 @@ class LLMTaskPlanner(Behaviour):
     - 无 tool_calls → 纯对话回复，intent = "chat"，直接写 response_text
     """
 
-    def __init__(self, name: str, config: RobotConfig):
+    def __init__(self, name: str, config: RobotConfig, engine=None):
         super().__init__(name)
         self.config = config
+        self.engine = engine
         self.conversation_history: list = []
         self.llm = None
         self.llm_with_tools = None
@@ -130,6 +131,8 @@ class LLMTaskPlanner(Behaviour):
             return Status.SUCCESS
 
         self.logger.info(f"规划指令: {command}")
+        if self.engine is not None:
+            self.engine.speak_blocking("好的，我先规划一下。")
 
         try:
             from langchain_core.messages import HumanMessage, SystemMessage

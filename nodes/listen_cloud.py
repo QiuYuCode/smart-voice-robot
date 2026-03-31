@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import time
+from collections import deque
 from email.utils import formatdate
 from urllib.parse import urlencode
 
@@ -30,6 +31,8 @@ class ListenCloudCommand(Behaviour):
         self.engine = engine
         self.vad_buffer = np.array([], dtype=np.float32)
         self.speech_buffer: list[np.ndarray] = []
+        self.pre_roll_buffer: deque[np.ndarray] = deque()
+        self.pre_roll_samples = 0
         self.in_speech = False
         self.last_voice_time = 0.0
 
@@ -199,6 +202,8 @@ class ListenCloudCommand(Behaviour):
         self.engine.vad.reset()
         self.vad_buffer = np.array([], dtype=np.float32)
         self.speech_buffer = []
+        self.pre_roll_buffer = deque()
+        self.pre_roll_samples = 0
         self.in_speech = False
         self.last_voice_time = time.time()
         self.blackboard.last_activity_time = time.time()
@@ -219,12 +224,23 @@ class ListenCloudCommand(Behaviour):
         while len(self.vad_buffer) >= window_size:
             block = self.vad_buffer[:window_size]
             self.vad_buffer = self.vad_buffer[window_size:]
+
+            # 维持一段短时预卷缓存，语音起点时拼接，减少句首被截断
+            self.pre_roll_buffer.append(block.copy())
+            self.pre_roll_samples += len(block)
+            max_pre_roll_samples = int(
+                SAMPLE_RATE * max(0.0, float(self.engine.config.cloud_asr_preroll_seconds))
+            )
+            while self.pre_roll_samples > max_pre_roll_samples and self.pre_roll_buffer:
+                popped = self.pre_roll_buffer.popleft()
+                self.pre_roll_samples -= len(popped)
+
             self.engine.vad.accept_waveform(block)
             if self.engine.vad.is_speech_detected():
                 self.last_voice_time = time.time()
                 if not self.in_speech:
                     self.in_speech = True
-                    self.speech_buffer = [block]
+                    self.speech_buffer = list(self.pre_roll_buffer)
 
         while not self.engine.vad.empty():
             self.engine.vad.pop()
@@ -266,4 +282,6 @@ class ListenCloudCommand(Behaviour):
     def terminate(self, new_status):
         self.vad_buffer = np.array([], dtype=np.float32)
         self.speech_buffer = []
+        self.pre_roll_buffer = deque()
+        self.pre_roll_samples = 0
         self.in_speech = False

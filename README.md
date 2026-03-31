@@ -724,6 +724,35 @@ class RobotConfig:
 
 ## 运行
 
+### 讯飞云 ASR/TTS 配置（可选）
+
+本项目支持保留本地 VAD，同时切换云端 ASR/TTS（讯飞 WebSocket）。
+
+1) 设置环境变量（密钥不写入代码）：
+
+```bash
+export XFYUN_IAT_APPID="your_iat_appid"
+export XFYUN_IAT_API_KEY="your_iat_api_key"
+export XFYUN_IAT_API_SECRET="your_iat_api_secret"
+
+export XFYUN_TTS_APPID="your_tts_appid"
+export XFYUN_TTS_API_KEY="your_tts_api_key"
+export XFYUN_TTS_API_SECRET="your_tts_api_secret"
+```
+
+2) 在 `config.py` 里切换后端：
+
+- `asr_backend = "iflytek_cloud"` 启用云端 ASR（`cloud_asr_strategy` 支持 `streaming`/`endpoint_once`）
+- `tts_backend = "iflytek_cloud"` 启用云端 TTS
+- `cloud_asr_fallback_to_local = True`、`cloud_tts_fallback_to_local = True` 开启失败回落本地
+
+3) 协议要点（已在代码中处理）：
+
+- ASR 上传音频为 PCM16 16k 单声道，`streaming` 模式按 40ms（1280 bytes）切帧上传
+- TTS 接口为 `wss://tts-api.xfyun.cn/v2/tts`，请求 `data.status` 固定为 `2`
+- TTS 请求 `data.text` 需要 base64，且 base64 前文本长度必须小于 8000 bytes（按编码字节数计算）
+- TTS 服务端会多帧返回 `data.audio`，客户端需要逐帧解码并拼接；`data=null`/空音频帧可忽略
+
 ```bash
 # 启动语音助手 (默认: 软件唤醒 + 关键词匹配模式)
 uv run main.py

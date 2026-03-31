@@ -5,8 +5,21 @@
 修改此文件即可调整唤醒词、音色、LLM 模型、意图关键词等，无需修改业务代码。
 """
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+def _read_env(*keys: str) -> str:
+    """按顺序读取环境变量，并做去空白/去包裹引号清洗。"""
+    for key in keys:
+        value = os.getenv(key)
+        if value is None:
+            continue
+        cleaned = value.strip().strip('"').strip("'").strip()
+        if cleaned:
+            return cleaned
+    return ""
+
 
 # 项目根目录
 base_dir = Path(__file__).parent
@@ -67,6 +80,26 @@ class RobotConfig:
     kws_keywords_threshold: float = 0.25
     kws_num_trailing_blanks: int = 1
 
+    # --- ASR 后端 ---
+    # "local": 本地 sherpa-onnx 流式识别
+    # "iflytek_cloud": 讯飞云识别
+    asr_backend: str = "local"
+    # "streaming": 逐帧上传(40ms)；"endpoint_once": 端点后一次性上传
+    cloud_asr_strategy: str = "streaming"
+    cloud_asr_fallback_to_local: bool = True
+
+    # --- 讯飞云 ASR 配置 (/v2/iat) ---
+    iflytek_iat_app_id: str = _read_env("XFYUN_IAT_APPID", "XFYUN_APPID")
+    iflytek_iat_api_key: str = _read_env("XFYUN_IAT_API_KEY", "XFYUN_API_KEY")
+    iflytek_iat_api_secret: str = _read_env("XFYUN_IAT_API_SECRET", "XFYUN_API_SECRET")
+    iflytek_iat_language: str = "zh_cn"
+    iflytek_iat_domain: str = "iat"
+    iflytek_iat_accent: str = "mandarin"
+    iflytek_iat_eos_ms: int = 1800
+    iflytek_iat_ptt: int = 1
+    iflytek_iat_audio_format: str = "audio/L16;rate=16000"
+    iflytek_iat_encoding: str = "raw"
+
     # --- TTS 音色 ---
     # aishell3 模型支持 sid 0-173，共 174 种音色
     tts_speaker_id: int = 99
@@ -74,6 +107,20 @@ class RobotConfig:
     tts_max_chars_per_chunk: int = 80
     tts_sentence_pause: float = 0.35
     tts_clause_pause: float = 0.05
+    tts_backend: str = "iflytek_cloud"  # "local" | "iflytek_cloud"
+    cloud_tts_fallback_to_local: bool = True
+
+    # --- 讯飞云 TTS 配置 (/v2/tts) ---
+    iflytek_tts_app_id: str = _read_env("XFYUN_TTS_APPID", "XFYUN_APPID")
+    iflytek_tts_api_key: str = _read_env("XFYUN_TTS_API_KEY", "XFYUN_API_KEY")
+    iflytek_tts_api_secret: str = _read_env("XFYUN_TTS_API_SECRET", "XFYUN_API_SECRET")
+    iflytek_tts_vcn: str = "xiaoyan"
+    iflytek_tts_aue: str = "raw"
+    iflytek_tts_auf: str = "audio/L16;rate=16000"
+    iflytek_tts_speed: int = 50
+    iflytek_tts_tte: str = "UTF8"
+    iflytek_tts_request_text_encoding: str = "utf-8"
+    iflytek_tts_max_bytes: int = 8000
 
     # --- VAD (语音活动检测) ---
     vad_threshold: float = 0.5

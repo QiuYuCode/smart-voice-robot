@@ -999,6 +999,7 @@ dependencies = [
     { name = "pyserial" },
     { name = "sherpa-onnx" },
     { name = "sounddevice" },
+    { name = "websocket-client" },
 ]
 
 [package.optional-dependencies]
@@ -1029,6 +1030,7 @@ requires-dist = [
     { name = "pyserial", specifier = ">=3.5" },
     { name = "sherpa-onnx", directory = "../sherpa-onnx" },
     { name = "sounddevice", specifier = ">=0.5.5" },
+    { name = "websocket-client", specifier = ">=1.8.0" },
 ]
 provides-extras = ["openai", "anthropic", "online"]
 
@@ -1413,6 +1415,15 @@ wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/d1/c8/929d81665d83f0b2ffaecb8e66c3091a50f62c7cb5b65e678bd75a96684e/uuid_utils-0.14.0-pp311-pypy311_pp73-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:cdbd82ff20147461caefc375551595ecf77ebb384e46267f128aca45a0f2cdfc", size = 467029, upload-time = "2026-01-20T20:37:08.277Z" },
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/8e/a0/27d7daa1bfed7163f4ccaf52d7d2f4ad7bb1002a85b45077938b91ee584f/uuid_utils-0.14.0-pp311-pypy311_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:eff57e8a5d540006ce73cf0841a643d445afe78ba12e75ac53a95ca2924a56be", size = 333298, upload-time = "2026-01-20T20:37:07.271Z" },
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/63/d4/acad86ce012b42ce18a12f31ee2aa3cbeeb98664f865f05f68c882945913/uuid_utils-0.14.0-pp311-pypy311_pp73-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:3fd9112ca96978361201e669729784f26c71fecc9c13a7f8a07162c31bd4d1e2", size = 359217, upload-time = "2026-01-20T20:36:59.687Z" },
+]
+
+[[package]]
+name = "websocket-client"
+version = "1.9.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/2c/41/aa4bf9664e4cda14c3b39865b12251e8e7d239f4cd0e3cc1b6c2ccde25c1/websocket_client-1.9.0.tar.gz", hash = "sha256:9e813624b6eb619999a97dc7958469217c3176312b3a16a4bd1bc7e08a46ec98", size = 70576, upload-time = "2025-10-07T21:16:36.495Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/34/db/b10e48aa8fff7407e67470363eac595018441cf32d5e1001567a7aeba5d2/websocket_client-1.9.0-py3-none-any.whl", hash = "sha256:af248a825037ef591efbf6ed20cc5faa03d3b47b9e5a2230a529eeee1c1fc3ef", size = 82616, upload-time = "2025-10-07T21:16:34.951Z" },
 ]
 
 [[package]]

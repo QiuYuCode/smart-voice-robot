@@ -60,6 +60,7 @@ from nodes import (
     WaitForWakeWord,
     HardwareWakeWord,
     ListenCommand,
+    ListenCloudCommand,
     RecognizeIntent,
     SpeakResponse,
     WakeupResponse,
@@ -90,10 +91,16 @@ def create_tree(
         name="DialogLoop", memory=False
     )
 
+    listen_node = (
+        ListenCloudCommand("ListenCloud", engine)
+        if config.asr_backend == "iflytek_cloud"
+        else ListenCommand("Listen", engine)
+    )
+
     if config.use_llm_planner:
         # === LLM 规划器模式: 支持一句话多指令 ===
         dialog_loop.add_children([
-            ListenCommand("Listen", engine),
+            listen_node,
             LLMTaskPlanner("Planner", config=config),
             PlanExecutor("Executor", config=config),
             SpeakResponse("Speak", engine),
@@ -115,7 +122,7 @@ def create_tree(
             DefaultResponse("DefaultResponse"),
         ])
         dialog_loop.add_children([
-            ListenCommand("Listen", engine),
+            listen_node,
             RecognizeIntent("Intent", config=config),
             action_selector,
             SpeakResponse("Speak", engine),

@@ -6,12 +6,19 @@
   - dialog_audio_queue: 供 ListenCommand (ASR) 消费
 """
 
+import base64
+import hashlib
+import hmac
+import json
 import sys
 import queue
+from email.utils import formatdate
+from urllib.parse import urlencode
 
 import numpy as np
 import sounddevice as sd
 import sherpa_onnx
+import websocket  # type: ignore[import-not-found]
 
 from config import (
     ASR_DIR,
@@ -63,16 +70,18 @@ class VoiceEngine:
             )
 
         # 2. ASR (流式语音识别)
-        self.asr = sherpa_onnx.OnlineRecognizer.from_transducer(
-            tokens=f"{ASR_DIR}/tokens.txt",
-            encoder=f"{ASR_DIR}/encoder-epoch-99-avg-1.onnx",
-            decoder=f"{ASR_DIR}/decoder-epoch-99-avg-1.onnx",
-            joiner=f"{ASR_DIR}/joiner-epoch-99-avg-1.onnx",
-            num_threads=config.num_threads,
-            sample_rate=SAMPLE_RATE,
-            enable_endpoint_detection=True,
-            provider=config.onnx_provider,
-        )
+        self.asr = None
+        if config.asr_backend == "local" or config.cloud_asr_fallback_to_local:
+            self.asr = sherpa_onnx.OnlineRecognizer.from_transducer(
+                tokens=f"{ASR_DIR}/tokens.txt",
+                encoder=f"{ASR_DIR}/encoder-epoch-99-avg-1.onnx",
+                decoder=f"{ASR_DIR}/decoder-epoch-99-avg-1.onnx",
+                joiner=f"{ASR_DIR}/joiner-epoch-99-avg-1.onnx",
+                num_threads=config.num_threads,
+                sample_rate=SAMPLE_RATE,
+                enable_endpoint_detection=True,
+                provider=config.onnx_provider,
+            )
 
         # 3. TTS (语音合成)
         self.tts = sherpa_onnx.OfflineTts(
@@ -274,12 +283,71 @@ class VoiceEngine:
                     result.append((chunk, p))
         return result
 
-    def generate_speech(self, text: str):
-        """生成 TTS 音频 (不播放)，返回 (samples, sample_rate)"""
-        segments = self._split_tts_segments(text)
-        if not segments:
-            return np.array([], dtype=np.float32), SAMPLE_RATE
+    def _split_text_by_bytes(self, text: str) -> list[str]:
+        """
+        按 UTF-8 bytes 长度切分文本，满足讯飞单次请求上限。
+        """
+        encoding = self.config.iflytek_tts_request_text_encoding
+        max_bytes = max(1, self.config.iflytek_tts_max_bytes - 1)
+        cleaned = " ".join(text.strip().split())
+        if not cleaned:
+            return []
 
+        chunks: list[str] = []
+        current_chars: list[str] = []
+        current_size = 0
+        for ch in cleaned:
+            b = ch.encode(encoding, errors="ignore")
+            if not b:
+                continue
+            if current_chars and current_size + len(b) > max_bytes:
+                chunks.append("".join(current_chars))
+                current_chars = [ch]
+                current_size = len(b)
+            else:
+                current_chars.append(ch)
+                current_size += len(b)
+        if current_chars:
+            chunks.append("".join(current_chars))
+        return chunks
+
+    @staticmethod
+    def _pcm16_bytes_to_float32(pcm_bytes: bytes) -> np.ndarray:
+        if not pcm_bytes:
+            return np.array([], dtype=np.float32)
+        pcm = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+        return pcm / 32768.0
+
+    @staticmethod
+    def _float32_to_pcm16_bytes(samples: np.ndarray) -> bytes:
+        clamped = np.clip(samples, -1.0, 1.0)
+        pcm = (clamped * 32767.0).astype(np.int16)
+        return pcm.tobytes()
+
+    @staticmethod
+    def _build_iflytek_ws_url(base_url: str, api_key: str, api_secret: str) -> str:
+        # e.g. base_url = "wss://tts-api.xfyun.cn/v2/tts"
+        host = base_url.split("//", 1)[1].split("/", 1)[0]
+        path = "/" + base_url.split("//", 1)[1].split("/", 1)[1]
+        date = formatdate(timeval=None, localtime=False, usegmt=True)
+        signature_origin = f"host: {host}\ndate: {date}\nGET {path} HTTP/1.1"
+        signature_sha = hmac.new(
+            api_secret.encode("utf-8"),
+            signature_origin.encode("utf-8"),
+            digestmod=hashlib.sha256,
+        ).digest()
+        signature = base64.b64encode(signature_sha).decode("utf-8")
+        authorization_origin = (
+            f'api_key="{api_key}", algorithm="hmac-sha256", '
+            f'headers="host date request-line", signature="{signature}"'
+        )
+        authorization = base64.b64encode(
+            authorization_origin.encode("utf-8")
+        ).decode("utf-8")
+        query = urlencode({"host": host, "date": date, "authorization": authorization})
+        return f"{base_url}?{query}"
+
+    def _generate_local_tts(self, segments: list[tuple[str, str]]) -> tuple[np.ndarray, int]:
         combined: list[np.ndarray] = []
         sample_rate = None
         sentence_pause = None
@@ -301,7 +369,6 @@ class VoiceEngine:
                 )
 
             combined.append(np.asarray(audio.samples, dtype=np.float32))
-
             if pause_type == "sentence":
                 combined.append(sentence_pause)
             elif pause_type == "clause":
@@ -310,6 +377,84 @@ class VoiceEngine:
         if combined:
             return np.concatenate(combined), sample_rate
         return np.array([], dtype=np.float32), SAMPLE_RATE
+
+    def _generate_iflytek_tts(self, text: str) -> tuple[np.ndarray, int]:
+        cfg = self.config
+        if not (cfg.iflytek_tts_app_id and cfg.iflytek_tts_api_key and cfg.iflytek_tts_api_secret):
+            raise RuntimeError("讯飞 TTS 密钥缺失，请设置 XFYUN_TTS_APPID/API_KEY/API_SECRET")
+
+        ws_url = self._build_iflytek_ws_url(
+            "wss://tts-api.xfyun.cn/v2/tts",
+            cfg.iflytek_tts_api_key,
+            cfg.iflytek_tts_api_secret,
+        )
+        print("[TTS][Cloud] 握手: wss://tts-api.xfyun.cn/v2/tts")
+
+        chunks = self._split_text_by_bytes(text)
+        all_samples: list[np.ndarray] = []
+        for chunk_text in chunks:
+            text_bytes = chunk_text.encode(cfg.iflytek_tts_request_text_encoding)
+            req = {
+                "common": {"app_id": cfg.iflytek_tts_app_id},
+                "business": {
+                    "aue": cfg.iflytek_tts_aue,
+                    "auf": cfg.iflytek_tts_auf,
+                    "vcn": cfg.iflytek_tts_vcn,
+                    "speed": int(np.clip(cfg.iflytek_tts_speed, 0, 100)),
+                    "tte": cfg.iflytek_tts_tte,
+                },
+                "data": {
+                    "status": 2,
+                    "text": base64.b64encode(text_bytes).decode("utf-8"),
+                },
+            }
+            ws = websocket.create_connection(ws_url, timeout=10)
+            try:
+                ws.send(json.dumps(req, ensure_ascii=False))
+                frame_count = 0
+                while True:
+                    raw = ws.recv()
+                    if not raw:
+                        continue
+                    frame_count += 1
+                    resp = json.loads(raw)
+                    code = int(resp.get("code", -1))
+                    if code != 0:
+                        sid = resp.get("sid", "")
+                        msg = resp.get("message", "")
+                        raise RuntimeError(f"讯飞TTS失败 code={code} sid={sid} msg={msg}")
+                    data = resp.get("data")
+                    if not data:
+                        continue
+                    audio_b64 = data.get("audio") or ""
+                    if audio_b64:
+                        pcm_bytes = base64.b64decode(audio_b64)
+                        all_samples.append(self._pcm16_bytes_to_float32(pcm_bytes))
+                    if int(data.get("status", 1)) == 2:
+                        print(f"[TTS][Cloud] 分片完成: frames={frame_count}")
+                        break
+            finally:
+                ws.close()
+
+        if all_samples:
+            return np.concatenate(all_samples), SAMPLE_RATE
+        raise RuntimeError("讯飞 TTS 未返回有效音频")
+
+    def generate_speech(self, text: str):
+        """生成 TTS 音频 (不播放)，返回 (samples, sample_rate)"""
+        segments = self._split_tts_segments(text)
+        if not segments:
+            return np.array([], dtype=np.float32), SAMPLE_RATE
+
+        if self.config.tts_backend == "iflytek_cloud":
+            try:
+                return self._generate_iflytek_tts(text)
+            except Exception as e:
+                print(f"[TTS][Cloud] 失败: {e}")
+                if not self.config.cloud_tts_fallback_to_local:
+                    raise
+                print("[TTS][Cloud] 回落到本地 TTS")
+        return self._generate_local_tts(segments)
 
     def speak_blocking(self, text: str):
         """阻塞式 TTS 播放 (用于简短提示音)"""

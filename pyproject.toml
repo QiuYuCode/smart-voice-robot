@@ -12,7 +12,9 @@ dependencies = [
     "numpy",
     "ollama>=0.6.1",
     "opencv-python>=4.13.0.90",
+    "pyagxarm",
     "py-trees>=2.4.0",
+    "pyyaml>=6.0.3",
     "pyserial>=3.5",
     "sherpa-onnx",
     "sounddevice>=0.5.5",
@@ -31,3 +33,4 @@ explicit = true
 
 [tool.uv.sources]
 sherpa-onnx = { path = "../sherpa-onnx" }
+pyagxarm = {path = "../pyAgxArm" }

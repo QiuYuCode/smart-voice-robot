@@ -42,7 +42,7 @@ block-beta
         KWS["KWS 唤醒词\nsherpa-onnx"]
         ASR["ASR 语音识别\nsherpa-onnx"]
         VAD["VAD 语音活动检测\nSilero VAD"]
-        TTS["TTS 语音合成\nVITS aishell3"]
+        TTS["TTS 语音合成\nVITS fanchen-C"]
     end
 
     space:3
@@ -555,8 +555,21 @@ smart-voice-robot/
 |------|------|--------|
 | zipformer-bilingual-zh-en | 流式 ASR (中英双语) | `sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/` |
 | kws-zipformer-wenetspeech | 关键词检测 (KWS) | `sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/` |
-| VITS aishell3 | TTS 语音合成 (174 音色) | `vits-zh-aishell3/` |
+| VITS fanchen-C | TTS 语音合成（单说话人，音质较好，**推荐**）| `vits-zh-hf-fanchen-C/` |
+| VITS aishell3 | TTS 语音合成（备选，174 音色）| `vits-zh-aishell3/` |
 | Silero VAD | 语音活动检测 (静默超时) | `silero_vad.onnx` |
+
+> **TTS 模型下载**（放入 `model/voice_models/` 后修改 `config.py` 中的 `TTS_DIR` 即可切换）：
+>
+> ```bash
+> # fanchen-C（推荐，当前使用）
+> wget https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-hf-fanchen-C.tar.bz2
+> tar -xjf vits-zh-hf-fanchen-C.tar.bz2
+>
+> # 其他可选模型（音质相近，可替换）
+> # vits-zh-hf-bronya / vits-zh-hf-eula / vits-zh-hf-abyssinvoker
+> # 下载地址格式相同，替换文件名即可
+> ```
 
 ### 安装依赖
 

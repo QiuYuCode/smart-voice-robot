@@ -40,8 +40,8 @@ ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02
 # sherpa-onnx 关键词检测
 KWS_DIR = MODELS_BASE / "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
 
-# sherpa-onnx VITS TTS (aishell3, 174 说话人)
-TTS_DIR = MODELS_BASE / "vits-zh-aishell3"
+# sherpa-onnx VITS TTS
+TTS_DIR = MODELS_BASE / "vits-zh-hf-fanchen-C"
 
 # Silero VAD 模型
 VAD_DIR = MODELS_BASE / "silero_vad.onnx"
@@ -102,12 +102,13 @@ class RobotConfig:
     cloud_asr_preroll_seconds: float = 0.3
 
     # --- TTS 音色 ---
-    # aishell3 模型支持 sid 0-173，共 174 种音色
-    tts_speaker_id: int = 99
-    tts_speed: float = 1.0
+    # fanchen-C 单说话人模型，sid 固定为 0
+    tts_speaker_id: int = 0
+    tts_speed: float = 1.2
+    tts_volume: float = 1.0  # 本地 TTS 音量增益，1.0=原始，>1.0 放大，超出 [-1,1] 自动截断
     tts_max_chars_per_chunk: int = 80
-    tts_sentence_pause: float = 0.35
-    tts_clause_pause: float = 0.05
+    tts_sentence_pause: float = 0.40
+    tts_clause_pause: float = 0.15
     tts_backend: str = "iflytek_cloud"  # "local" | "iflytek_cloud"
     cloud_tts_fallback_to_local: bool = True
 
@@ -139,7 +140,7 @@ class RobotConfig:
     interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断
 
     # --- 相机 ---
-    camera_index: int = 4  # /dev/video 设备索引 (RealSense 彩色流)
+    camera_index: int = 0  # /dev/video 设备索引 (0=普通摄像头, 4=RealSense 彩色流)
     camera_width: int = 640
     camera_height: int = 480
     camera_save_dir: str = "captures"  # 照片/视频保存目录 (相对于项目根目录)
@@ -148,8 +149,8 @@ class RobotConfig:
 
     # --- LLM ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
-    llm_provider: str = "deepseek"
-    llm_model: str = "deepseek-reasoner"
+    llm_provider: str = "ollama"
+    llm_model: str = "qwen2.5:0.5b"
     llm_base_url: str = "http://localhost:11434"
     llm_api_key: str = "" if llm_provider == "ollama" else _read_env("LLM_API_KEY") # 在线模型的 API Key (ollama 不需要)
     llm_system_prompt: str = (
@@ -177,7 +178,7 @@ class RobotConfig:
 
     # --- 任务规划器 (LLM Function Calling) ---
     # True 时使用 LLM 解析多步指令，False 时使用关键词匹配（原有行为）
-    use_llm_planner: bool = True
+    use_llm_planner: bool = False
     planner_system_prompt: str = (
         "你是一个机器人任务规划器。根据用户的自然语言指令，调用合适的工具来完成任务。\n"
         "规则：\n"

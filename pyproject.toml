@@ -16,6 +16,7 @@ dependencies = [
     "py-trees>=2.4.0",
     "pyyaml>=6.0.3",
     "pyserial>=3.5",
+    "pyyaml>=6.0.3",
     "sherpa-onnx",
     "sounddevice>=0.5.5",
     "websocket-client>=1.8.0",
@@ -25,6 +26,10 @@ dependencies = [
 openai = ["langchain-openai"]
 anthropic = ["langchain-anthropic"]
 online = ["langchain-openai", "langchain-anthropic"]
+
+[[tool.uv.index]]
+url = "https://uv.agentsmirror.com/pypi/simple"
+default = true
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

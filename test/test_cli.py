@@ -59,7 +59,7 @@ class SimpleTTS:
             config=sherpa_onnx.OfflineTtsConfig(
                 model=sherpa_onnx.OfflineTtsModelConfig(
                     vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=f"{TTS_DIR}/vits-aishell3.onnx",
+                        model=str(next(TTS_DIR.glob("*.onnx"))),
                         lexicon=f"{TTS_DIR}/lexicon.txt",
                         tokens=f"{TTS_DIR}/tokens.txt",
                     ),

@@ -88,7 +88,7 @@ class VoiceEngine:
             config=sherpa_onnx.OfflineTtsConfig(
                 model=sherpa_onnx.OfflineTtsModelConfig(
                     vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=f"{TTS_DIR}/vits-aishell3.onnx",
+                        model=str(next(TTS_DIR.glob("*.onnx"))),
                         lexicon=f"{TTS_DIR}/lexicon.txt",
                         tokens=f"{TTS_DIR}/tokens.txt",
                     ),
@@ -243,7 +243,7 @@ class VoiceEngine:
         将文本按标点拆分为 (片段, 停顿类型) 列表。
         停顿类型: "sentence" | "clause" | "none"
         """
-        cleaned = " ".join(text.strip().split())
+        cleaned = "".join(text.strip().split())
         if not cleaned:
             return []
 
@@ -375,7 +375,11 @@ class VoiceEngine:
                 combined.append(clause_pause)
 
         if combined:
-            return np.concatenate(combined), sample_rate
+            samples = np.concatenate(combined)
+            gain = self.config.tts_volume
+            if gain != 1.0:
+                samples = np.clip(samples * gain, -1.0, 1.0)
+            return samples, sample_rate
         return np.array([], dtype=np.float32), SAMPLE_RATE
 
     def _generate_iflytek_tts(self, text: str) -> tuple[np.ndarray, int]:

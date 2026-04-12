@@ -15,6 +15,8 @@ import websocket  # type: ignore[import-not-found]
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 
+from loguru import logger
+
 from config import SAMPLE_RATE
 
 
@@ -100,7 +102,7 @@ class ListenCloudCommand(Behaviour):
         if not (cfg.iflytek_iat_app_id and cfg.iflytek_iat_api_key and cfg.iflytek_iat_api_secret):
             raise RuntimeError("讯飞 ASR 密钥缺失，请设置 XFYUN_IAT_APPID/API_KEY/API_SECRET")
         ws_url = self._build_ws_url(cfg.iflytek_iat_api_key, cfg.iflytek_iat_api_secret)
-        print("[ASR][Cloud] 握手: wss://iat-api.xfyun.cn/v2/iat")
+        logger.debug("[ASR][Cloud] 握手: wss://iat-api.xfyun.cn/v2/iat")
         pcm_bytes = self._float32_to_pcm16_bytes(samples)
         frame_bytes = 1280  # 40ms @ 16k, mono, pcm16
         chunks = [pcm_bytes[i : i + frame_bytes] for i in range(0, len(pcm_bytes), frame_bytes)]
@@ -192,7 +194,7 @@ class ListenCloudCommand(Behaviour):
                     break
         finally:
             ws.close()
-            print(f"[ASR][Cloud] 发送帧数: {frame_count}, 最终文本长度: {len(final_text)}")
+            logger.debug(f"[ASR][Cloud] 发送帧数: {frame_count}, 最终文本长度: {len(final_text)}")
 
         return final_text.strip()
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging
+from loguru import logger
 import platform
 import time
 from datetime import datetime
@@ -19,7 +19,6 @@ try:
 except ImportError:  # pragma: no cover
     cv2 = None
 
-logger = logging.getLogger(__name__)
 
 
 # ============================================================================

@@ -9,6 +9,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from loguru import logger
+
 def _read_env(*keys: str) -> str:
     """按顺序读取环境变量，并做去空白/去包裹引号清洗。"""
     for key in keys:
@@ -32,7 +34,7 @@ MODELS_BASE = base_dir / "model" / "voice_models"
 
 if not MODELS_BASE.exists():
     MODELS_BASE.mkdir(parents=True, exist_ok=True)
-    print(f"模型目录不存在，已创建: {MODELS_BASE}")
+    logger.info(f"模型目录不存在，已创建: {MODELS_BASE}")
     
 # sherpa-onnx 流式 ASR
 ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
@@ -167,7 +169,7 @@ class RobotConfig:
     # --- VLM (视觉语言模型) ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
     vlm_provider: str = "ollama"
-    vlm_model: str = "qwen3.5:0.8b"
+    vlm_model: str = "qwen2.5:0.5b"
     vlm_base_url: str = "http://localhost:11434"
     vlm_api_key: str = ""
     vlm_system_prompt: str = (

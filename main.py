@@ -49,9 +49,11 @@
     python main.py
 """
 
+import sys
 import time
 
 import py_trees
+from loguru import logger
 from py_trees.common import Status
 
 from config import default_config, RobotConfig
@@ -158,6 +160,15 @@ def create_tree(
 
 
 def main():
+    # 配置 loguru：移除默认 handler，使用自定义格式
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> - <level>{message}</level>",
+        level="DEBUG",
+        colorize=True,
+    )
+
     config = default_config
 
     # 1. 初始化语音引擎
@@ -169,19 +180,18 @@ def main():
     tree = py_trees.trees.BehaviourTree(root)
     tree.setup(timeout=30)
 
-    print("\n系统启动完毕! 等待唤醒词...")
-    print(f"  唤醒模式: {config.wake_mode}")
+    logger.info("系统启动完毕! 等待唤醒词...")
+    logger.info(f"  唤醒模式: {config.wake_mode}")
     if config.wake_mode == "software":
-        print(f"  唤醒词文件: {config.kws_keywords_file}")
+        logger.info(f"  唤醒词文件: {config.kws_keywords_file}")
     else:
-        print(f"  串口设备: {config.hw_serial_port}")
-        print(f"  麦克风阵列: {config.hw_mic_array}")
-    print(f"  TTS 音色 ID: {config.tts_speaker_id}")
-    print(f"  LLM 模型: {config.llm_model}")
+        logger.info(f"  串口设备: {config.hw_serial_port}")
+        logger.info(f"  麦克风阵列: {config.hw_mic_array}")
+    logger.info(f"  TTS 音色 ID: {config.tts_speaker_id}")
+    logger.info(f"  LLM 模型: {config.llm_model}")
     mode_label = "LLM 多指令规划" if config.use_llm_planner else "关键词匹配"
-    print(f"  意图模式: {mode_label}")
-    print(f"  对话超时: {config.dialog_timeout}s")
-    print()
+    logger.info(f"  意图模式: {mode_label}")
+    logger.info(f"  对话超时: {config.dialog_timeout}s")
 
     if config.startup_sound_enabled:
         engine.speak_blocking(config.startup_sound_text)
@@ -192,14 +202,14 @@ def main():
 
             # 整个流程结束 (对话超时 / 打断)，重置回 idle
             if root.status in (Status.SUCCESS, Status.FAILURE):
-                print("--- 回合结束，回到待机 ---\n")
+                logger.debug("回合结束，回到待机")
                 root.stop(Status.INVALID)
                 time.sleep(0.5)
 
             time.sleep(config.tick_interval)
 
     except KeyboardInterrupt:
-        print("\n停止中...")
+        logger.info("停止中...")
         engine.stop()
 
 

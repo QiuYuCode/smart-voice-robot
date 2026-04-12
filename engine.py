@@ -10,7 +10,6 @@ import base64
 import hashlib
 import hmac
 import json
-import sys
 import queue
 from email.utils import formatdate
 from urllib.parse import urlencode
@@ -19,6 +18,7 @@ import numpy as np
 import sounddevice as sd
 import sherpa_onnx
 import websocket  # type: ignore[import-not-found]
+from loguru import logger
 
 from config import (
     ASR_DIR,
@@ -36,7 +36,7 @@ class VoiceEngine:
 
     def __init__(self, config: RobotConfig):
         self.config = config
-        print(f"正在加载语音模型 ({config.onnx_provider.upper()})...")
+        logger.info(f"正在加载语音模型 ({config.onnx_provider.upper()})...")
 
         # 音频队列
         self.dialog_audio_queue: queue.Queue = queue.Queue()
@@ -111,7 +111,7 @@ class VoiceEngine:
         )
         self.vad_window_size = vad_config.silero_vad.window_size
 
-        print("所有模型加载完成。")
+        logger.info("所有模型加载完成。")
 
     def _configure_audio_devices(self):
         """
@@ -121,7 +121,7 @@ class VoiceEngine:
         try:
             devices = sd.query_devices()
         except Exception as e:
-            print(f"[Audio] 查询设备失败，使用系统默认: {e}")
+            logger.warning(f"[Audio] 查询设备失败，使用系统默认: {e}")
             return
 
         # 在 Linux + ALSA 后端下，sounddevice 常见到的稳定入口是 "pulse"。
@@ -139,8 +139,8 @@ class VoiceEngine:
             sd.default.device = (pulse_idx, pulse_idx)
             try:
                 pulse_name = sd.query_devices(pulse_idx)["name"]
-                print(f"[Audio] 输入设备: {pulse_name}")
-                print(f"[Audio] 输出设备: {pulse_name}")
+                logger.info(f"[Audio] 输入设备: {pulse_name}")
+                logger.info(f"[Audio] 输出设备: {pulse_name}")
             except Exception:
                 pass
             return
@@ -187,8 +187,8 @@ class VoiceEngine:
         try:
             in_name = sd.query_devices(sd.default.device[0])["name"]
             out_name = sd.query_devices(sd.default.device[1])["name"]
-            print(f"[Audio] 输入设备: {in_name}")
-            print(f"[Audio] 输出设备: {out_name}")
+            logger.info(f"[Audio] 输入设备: {in_name}")
+            logger.info(f"[Audio] 输出设备: {out_name}")
         except Exception:
             pass
 
@@ -199,7 +199,7 @@ class VoiceEngine:
     def audio_callback(self, indata, frames, time_info, status):
         """麦克风数据回调 - 写入对话队列"""
         if status:
-            print(status, file=sys.stderr)
+            logger.warning(f"[Audio] 回调状态异常: {status}")
         raw_bytes = bytes(indata)
         self.dialog_audio_queue.put(raw_bytes)
 
@@ -219,7 +219,7 @@ class VoiceEngine:
             callback=self.audio_callback,
         )
         self.mic_stream.start()
-        print("麦克风已启动。")
+        logger.info("麦克风已启动。")
 
     def stop(self):
         """停止音频流和硬件驱动"""
@@ -392,7 +392,7 @@ class VoiceEngine:
             cfg.iflytek_tts_api_key,
             cfg.iflytek_tts_api_secret,
         )
-        print("[TTS][Cloud] 握手: wss://tts-api.xfyun.cn/v2/tts")
+        logger.debug("[TTS][Cloud] 握手: wss://tts-api.xfyun.cn/v2/tts")
 
         chunks = self._split_text_by_bytes(text)
         all_samples: list[np.ndarray] = []
@@ -435,7 +435,7 @@ class VoiceEngine:
                         pcm_bytes = base64.b64decode(audio_b64)
                         all_samples.append(self._pcm16_bytes_to_float32(pcm_bytes))
                     if int(data.get("status", 1)) == 2:
-                        print(f"[TTS][Cloud] 分片完成: frames={frame_count}")
+                        logger.debug(f"[TTS][Cloud] 分片完成: frames={frame_count}")
                         break
             finally:
                 ws.close()
@@ -454,15 +454,15 @@ class VoiceEngine:
             try:
                 return self._generate_iflytek_tts(text)
             except Exception as e:
-                print(f"[TTS][Cloud] 失败: {e}")
+                logger.error(f"[TTS][Cloud] 失败: {e}")
                 if not self.config.cloud_tts_fallback_to_local:
                     raise
-                print("[TTS][Cloud] 回落到本地 TTS")
+                logger.warning("[TTS][Cloud] 回落到本地 TTS")
         return self._generate_local_tts(segments)
 
     def speak_blocking(self, text: str):
         """阻塞式 TTS 播放 (用于简短提示音)"""
-        print(f"[TTS] {text}")
+        logger.info(f"[TTS] {text}")
         samples, sr = self.generate_speech(text)
         sd.play(samples, samplerate=sr)
         sd.wait()

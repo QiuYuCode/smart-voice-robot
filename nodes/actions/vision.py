@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging
+from loguru import logger
 
 import py_trees
 from py_trees.behaviour import Behaviour
@@ -10,8 +10,6 @@ from py_trees.common import Status
 
 from config import RobotConfig
 from nodes.actions.camera import capture_frame_as_base64
-
-logger = logging.getLogger(__name__)
 
 
 def _create_vlm(config: RobotConfig):

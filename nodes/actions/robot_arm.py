@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import logging
+from loguru import logger
 
 import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
-
-logger = logging.getLogger(__name__)
 
 
 # ============================================================================

@@ -35,6 +35,9 @@ class SpeakResponse(Behaviour):
             key="response_text", access=py_trees.common.Access.READ
         )
         self.blackboard.register_key(
+            key="user_command", access=py_trees.common.Access.READ
+        )
+        self.blackboard.register_key(
             key="is_speaking", access=py_trees.common.Access.WRITE
         )
         self.blackboard.register_key(
@@ -57,6 +60,12 @@ class SpeakResponse(Behaviour):
         self.engine.speak_blocking(text)
         self.blackboard.is_speaking = False
         self.blackboard.speak_start_time = 0.0
+
+        # 写入监控对话历史（仅当监控已启用时）
+        monitor = getattr(self.engine, "monitor", None)
+        if monitor is not None:
+            user_cmd = getattr(self.blackboard, "user_command", "")
+            monitor.log_conversation(user_cmd, text)
 
     def update(self):
         # 阻塞式播放在 initialise 中已完成

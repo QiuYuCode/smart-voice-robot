@@ -216,6 +216,15 @@ class RobotConfig:
     onnx_provider: str = "cpu"  # ONNX 推理设备: "cuda" | "cpu"
     verbose: bool = True
 
+    # --- 日志 ---
+    log_dir: str = "logs"           # 日志文件保存目录
+    log_retention: str = "7 days"   # 日志保留时长
+    log_level: str = "DEBUG"        # 文件日志级别
+
+    # --- 监控后台 ---
+    enable_monitor: bool = True   # 是否启用 Web 监控面板
+    monitor_port: int = 8765        # 监控面板端口
+
 
 # 全局默认配置实例
 default_config = RobotConfig()

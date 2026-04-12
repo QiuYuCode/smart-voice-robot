@@ -56,6 +56,9 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Application logs
+logs/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -248,3 +251,5 @@ AMENT_IGNORE
 .cursor/
 captures/
 .github/
+node_modules/
+monitor/dist/

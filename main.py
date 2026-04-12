@@ -160,6 +160,8 @@ def create_tree(
 
 
 def main():
+    config = default_config
+
     # 配置 loguru：移除默认 handler，使用自定义格式
     logger.remove()
     logger.add(
@@ -168,8 +170,14 @@ def main():
         level="DEBUG",
         colorize=True,
     )
-
-    config = default_config
+    logger.add(
+        f"{config.log_dir}/robot_{{time:YYYY-MM-DD}}.log",
+        rotation="00:00",
+        retention=config.log_retention,
+        encoding="utf-8",
+        level=config.log_level,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
+    )
 
     # 1. 初始化语音引擎
     engine = VoiceEngine(config)
@@ -179,6 +187,17 @@ def main():
     root = create_tree(engine, config)
     tree = py_trees.trees.BehaviourTree(root)
     tree.setup(timeout=30)
+
+    # 3. 可选：启动 Web 监控面板
+    if config.enable_monitor:
+        from monitor.server import MonitorServer
+        from monitor.visitor import StateCapturingVisitor
+        monitor = MonitorServer(port=config.monitor_port, config=config)
+        monitor.start_background()
+        engine.monitor = monitor
+        visitor = StateCapturingVisitor(monitor.state_queue, monitor.conversation_log, root, monitor=monitor)
+        tree.add_visitor(visitor)
+        logger.info(f"监控面板: http://localhost:{config.monitor_port}")
 
     logger.info("系统启动完毕! 等待唤醒词...")
     logger.info(f"  唤醒模式: {config.wake_mode}")

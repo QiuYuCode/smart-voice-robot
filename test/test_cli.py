@@ -26,7 +26,9 @@ import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 
-from config import default_config, RobotConfig, TTS_DIR, SAMPLE_RATE
+from pathlib import Path
+
+from config import default_config, RobotConfig, SAMPLE_RATE
 from nodes.intent import RecognizeIntent
 from nodes.guards import DialogContinueGuard
 from nodes.planner import LLMTaskPlanner
@@ -59,9 +61,9 @@ class SimpleTTS:
             config=sherpa_onnx.OfflineTtsConfig(
                 model=sherpa_onnx.OfflineTtsModelConfig(
                     vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=str(next(TTS_DIR.glob("*.onnx"))),
-                        lexicon=f"{TTS_DIR}/lexicon.txt",
-                        tokens=f"{TTS_DIR}/tokens.txt",
+                        model=str(next(Path(config.tts_model_dir).glob("*.onnx"))),
+                        lexicon=f"{config.tts_model_dir}/lexicon.txt",
+                        tokens=f"{config.tts_model_dir}/tokens.txt",
                     ),
                     num_threads=config.num_threads,
                 )

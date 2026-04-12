@@ -20,11 +20,9 @@ import sherpa_onnx
 import websocket  # type: ignore[import-not-found]
 from loguru import logger
 
+from pathlib import Path
+
 from config import (
-    ASR_DIR,
-    KWS_DIR,
-    TTS_DIR,
-    VAD_DIR,
     SAMPLE_RATE,
     CHUNK_SIZE,
     RobotConfig,
@@ -50,10 +48,10 @@ class VoiceEngine:
 
         if config.wake_mode == "software":
             self.kws = sherpa_onnx.KeywordSpotter(
-                tokens=f"{KWS_DIR}/tokens.txt",
-                encoder=f"{KWS_DIR}/encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-                decoder=f"{KWS_DIR}/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-                joiner=f"{KWS_DIR}/joiner-epoch-12-avg-2-chunk-16-left-64.onnx",
+                tokens=f"{config.kws_model_dir}/tokens.txt",
+                encoder=f"{config.kws_model_dir}/encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+                decoder=f"{config.kws_model_dir}/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+                joiner=f"{config.kws_model_dir}/joiner-epoch-12-avg-2-chunk-16-left-64.onnx",
                 keywords_file=config.kws_keywords_file,
                 keywords_score=config.kws_keywords_score,
                 keywords_threshold=config.kws_keywords_threshold,
@@ -63,7 +61,8 @@ class VoiceEngine:
                 provider=config.onnx_provider,
             )
         elif config.wake_mode == "hardware":
-            from rk3328 import RK3328Driver
+            # DEPRECATED: RK3328 硬件唤醒已弃用，rk3328.py 驱动不再维护
+            from rk3328 import RK3328Driver  # type: ignore[import-not-found]
             self.rk3328_driver = RK3328Driver(
                 port=config.hw_serial_port,
                 baudrate=config.hw_serial_baudrate,
@@ -73,10 +72,10 @@ class VoiceEngine:
         self.asr = None
         if config.asr_backend == "local" or config.cloud_asr_fallback_to_local:
             self.asr = sherpa_onnx.OnlineRecognizer.from_transducer(
-                tokens=f"{ASR_DIR}/tokens.txt",
-                encoder=f"{ASR_DIR}/encoder-epoch-99-avg-1.onnx",
-                decoder=f"{ASR_DIR}/decoder-epoch-99-avg-1.onnx",
-                joiner=f"{ASR_DIR}/joiner-epoch-99-avg-1.onnx",
+                tokens=f"{config.asr_model_dir}/tokens.txt",
+                encoder=f"{config.asr_model_dir}/encoder-epoch-99-avg-1.onnx",
+                decoder=f"{config.asr_model_dir}/decoder-epoch-99-avg-1.onnx",
+                joiner=f"{config.asr_model_dir}/joiner-epoch-99-avg-1.onnx",
                 num_threads=config.num_threads,
                 sample_rate=SAMPLE_RATE,
                 enable_endpoint_detection=True,
@@ -88,9 +87,9 @@ class VoiceEngine:
             config=sherpa_onnx.OfflineTtsConfig(
                 model=sherpa_onnx.OfflineTtsModelConfig(
                     vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-                        model=str(next(TTS_DIR.glob("*.onnx"))),
-                        lexicon=f"{TTS_DIR}/lexicon.txt",
-                        tokens=f"{TTS_DIR}/tokens.txt",
+                        model=str(next(Path(config.tts_model_dir).glob("*.onnx"))),
+                        lexicon=f"{config.tts_model_dir}/lexicon.txt",
+                        tokens=f"{config.tts_model_dir}/tokens.txt",
                     ),
                     num_threads=config.num_threads,
                     provider=config.onnx_provider,
@@ -100,7 +99,7 @@ class VoiceEngine:
 
         # 4. VAD (语音活动检测 - Silero VAD)
         vad_config = sherpa_onnx.VadModelConfig()
-        vad_config.silero_vad.model = str(VAD_DIR)
+        vad_config.silero_vad.model = config.vad_model_path
         vad_config.silero_vad.threshold = config.vad_threshold
         vad_config.silero_vad.min_silence_duration = config.vad_min_silence_duration
         vad_config.silero_vad.min_speech_duration = config.vad_min_speech_duration

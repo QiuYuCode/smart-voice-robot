@@ -2,13 +2,17 @@
 机器人语音助手配置文件
 
 所有可配置参数集中在 RobotConfig dataclass 中。
-修改此文件即可调整唤醒词、音色、LLM 模型、意图关键词等，无需修改业务代码。
+运行时配置从 config.yaml 加载；敏感字段（API Key 等）始终从环境变量读取。
 """
+from __future__ import annotations
 
+import dataclasses
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
+import yaml
 from loguru import logger
 
 def _read_env(*keys: str) -> str:
@@ -65,17 +69,18 @@ CHUNK_SIZE = int(SAMPLE_RATE * 0.1)  # 0.1 秒 = 1600 采样点
 class RobotConfig:
     """机器人语音助手的全部可配置参数"""
 
+    # --- 模型路径 ---
+    # 相对路径以项目根目录为基准；绝对路径直接使用
+    asr_model_dir: str = str(ASR_DIR)
+    kws_model_dir: str = str(KWS_DIR)
+    tts_model_dir: str = str(TTS_DIR)
+    vad_model_path: str = str(VAD_DIR)
+
     # --- 唤醒模式 ---
-    # "software": sherpa-onnx KWS 软件唤醒
-    # "hardware": RK3328 降噪板硬件唤醒
+    # "software": sherpa-onnx KWS 软件唤醒（唯一支持的模式）
     wake_mode: str = "software"
 
-    # --- 硬件唤醒 (RK3328 降噪板) ---
-    hw_serial_port: str = "/dev/ttyUSB0"
-    hw_serial_baudrate: int = 115200
-    hw_mic_array: str = "mic6_circle"  # mic4: 线性4麦, mic6: 线性6麦, mic6_circle: 环形6麦
-
-    # --- 唤醒词 (KWS, 仅 software 模式) ---
+    # --- 唤醒词 (KWS) ---
     # 替换 keywords_file 路径即可更换唤醒词
     kws_keywords_file: str = str(KWS_DIR / "keywords.txt")
     kws_keywords_score: float = 1.0
@@ -226,5 +231,86 @@ class RobotConfig:
     monitor_port: int = 8765        # 监控面板端口
 
 
-# 全局默认配置实例
-default_config = RobotConfig()
+# YAML 配置文件路径
+CONFIG_YAML_PATH: Path = base_dir / "config.yaml"
+
+# 不写入 YAML 的敏感字段，始终从环境变量读取
+_SECRET_FIELDS: frozenset[str] = frozenset({
+    "iflytek_iat_app_id",
+    "iflytek_iat_api_key",
+    "iflytek_iat_api_secret",
+    "iflytek_tts_app_id",
+    "iflytek_tts_api_key",
+    "iflytek_tts_api_secret",
+    "llm_api_key",
+    "vlm_api_key",
+})
+
+# 相对路径字段：YAML 中若为相对路径，自动解析为相对项目根目录的绝对路径
+_PATH_FIELDS: frozenset[str] = frozenset({
+    "kws_keywords_file",
+    "asr_model_dir",
+    "kws_model_dir",
+    "tts_model_dir",
+    "vad_model_path",
+})
+
+
+def load_config(path: Path | str | None = None) -> RobotConfig:
+    """从 YAML 文件加载配置，敏感字段始终从环境变量覆盖。
+
+    Args:
+        path: YAML 文件路径，默认为项目根目录下的 config.yaml。
+
+    Returns:
+        填充好的 RobotConfig 实例。
+    """
+    cfg = RobotConfig()
+    yaml_path = Path(path) if path is not None else CONFIG_YAML_PATH
+
+    if yaml_path.exists():
+        with open(yaml_path, encoding="utf-8") as f:
+            data: dict[str, Any] = yaml.safe_load(f) or {}
+        for key, value in data.items():
+            if key in _SECRET_FIELDS:
+                continue
+            if not hasattr(cfg, key):
+                logger.warning(f"[config] 忽略未知配置项: {key!r}")
+                continue
+            if key in _PATH_FIELDS and isinstance(value, str) and not Path(value).is_absolute():
+                value = str(base_dir / value)
+            setattr(cfg, key, value)
+        logger.debug(f"[config] 已从 {yaml_path} 加载配置")
+    else:
+        logger.debug(f"[config] 配置文件不存在，使用内置默认值: {yaml_path}")
+
+    # 敏感字段始终从环境变量读取（覆盖 YAML 或 dataclass 默认值）
+    cfg.iflytek_iat_app_id = _read_env("XFYUN_IAT_APPID", "XFYUN_APPID")
+    cfg.iflytek_iat_api_key = _read_env("XFYUN_IAT_API_KEY", "XFYUN_API_KEY")
+    cfg.iflytek_iat_api_secret = _read_env("XFYUN_IAT_API_SECRET", "XFYUN_API_SECRET")
+    cfg.iflytek_tts_app_id = _read_env("XFYUN_TTS_APPID", "XFYUN_APPID")
+    cfg.iflytek_tts_api_key = _read_env("XFYUN_TTS_API_KEY", "XFYUN_API_KEY")
+    cfg.iflytek_tts_api_secret = _read_env("XFYUN_TTS_API_SECRET", "XFYUN_API_SECRET")
+    cfg.llm_api_key = _read_env("LLM_API_KEY")
+    cfg.vlm_api_key = _read_env("VLM_API_KEY", "LLM_API_KEY")
+
+    return cfg
+
+
+def save_config(config: RobotConfig, path: Path | str | None = None) -> None:
+    """将配置持久化到 YAML 文件（敏感字段不写入）。
+
+    Args:
+        config: 要保存的 RobotConfig 实例。
+        path: 目标 YAML 文件路径，默认为 CONFIG_YAML_PATH。
+    """
+    yaml_path = Path(path) if path is not None else CONFIG_YAML_PATH
+    raw = dataclasses.asdict(config)
+    safe = {k: v for k, v in raw.items() if k not in _SECRET_FIELDS}
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        yaml.dump(safe, f, allow_unicode=True, default_flow_style=False, sort_keys=True)
+    logger.debug(f"[config] 配置已保存到 {yaml_path}")
+
+
+# 全局默认配置实例（从 config.yaml 加载，文件不存在时使用内置默认值）
+default_config = load_config()

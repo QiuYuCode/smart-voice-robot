@@ -416,7 +416,7 @@ flowchart LR
 | 节点 | 文件 | 功能 | Blackboard I/O |
 |------|------|------|----------------|
 | `WaitForWakeWord` | `nodes/wake_word.py` | 软件 KWS 唤醒词检测 (`wake_mode=software`) | 无 (直接消费 audio_queue) |
-| `HardwareWakeWord` | `nodes/hw_wake_word.py` | RK3328 降噪板硬件唤醒 (`wake_mode=hardware`) | 无 (消费 rk3328 wake_event_queue) |
+| ~~`HardwareWakeWord`~~ | `nodes/hw_wake_word.py` | *(DEPRECATED)* RK3328 降噪板硬件唤醒 | — |
 | `WakeupResponse` | `nodes/speak.py` | 播放唤醒提示音 "我在，请说" (阻塞式 TTS) | 无 |
 | `ListenCommand` | `nodes/listen.py` | 流式 ASR + VAD 检测。ASR 端点+有文本→SUCCESS；VAD 静默超时→FAILURE | Write: `user_command`, `last_activity_time` |
 | `RecognizeIntent` | `nodes/intent.py` | 关键词匹配意图，无匹配则设为 `chat`（仅关键词匹配模式） | Read: `user_command` / Write: `intent` |
@@ -503,12 +503,12 @@ py_trees 的 Blackboard 是节点间共享数据的中心化存储，采用命�
 smart-voice-robot/
 ├── main.py                          # 入口：构建行为树 + 主循环
 ├── engine.py                        # VoiceEngine：管理 KWS/ASR/VAD/TTS 模型和音频流
-├── config.py                        # RobotConfig：所有可配置参数
-├── rk3328.py                        # RK3328 降噪板串口协议驱动 (硬件唤醒)
+├── config.py                        # RobotConfig 数据类 + load_config/save_config
+├── config.yaml                      # 运行时配置文件（唯一需要修改的配置入口）
 ├── nodes/
 │   ├── __init__.py                  # 节点模块导出
 │   ├── wake_word.py                 # WaitForWakeWord - 软件唤醒词检测
-│   ├── hw_wake_word.py              # HardwareWakeWord - 硬件唤醒 (RK3328)
+│   ├── hw_wake_word.py              # HardwareWakeWord - 硬件唤醒 (DEPRECATED)
 │   ├── listen.py                    # ListenCommand - 流式 ASR + VAD 静默超时
 │   ├── intent.py                    # RecognizeIntent - 关键词意图识别
 │   ├── speak.py                     # SpeakResponse + WakeupResponse - TTS
@@ -549,7 +549,7 @@ smart-voice-robot/
 
 ### 语音模型
 
-需要下载 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 模型文件，放置到 `config.py` 中 `MODELS_BASE` 指定的路径：
+需要下载 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 模型文件，放置到 `config.yaml` 中 `*_model_dir` 指定的路径（默认为 `model/voice_models/`）：
 
 | 模型 | 用途 | 文件/目录名 |
 |------|------|--------|
@@ -559,7 +559,7 @@ smart-voice-robot/
 | VITS aishell3 | TTS 语音合成（备选，174 音色）| `vits-zh-aishell3/` |
 | Silero VAD | 语音活动检测 (静默超时) | `silero_vad.onnx` |
 
-> **TTS 模型下载**（放入 `model/voice_models/` 后修改 `config.py` 中的 `TTS_DIR` 即可切换）：
+> **TTS 模型下载**（放入 `model/voice_models/` 后修改 `config.yaml` 中的 `tts_model_dir` 即可切换）：
 >
 > ```bash
 > # fanchen-C（推荐，当前使用）
@@ -649,10 +649,10 @@ SHERPA_ONNX_CMAKE_ARGS="-DSHERPA_ONNX_ENABLE_GPU=ON -DSHERPA_ONNX_LINUX_ARM64_GP
 
 ### 运行期配置
 
-在 `config.py` 的 `RobotConfig` 中设置：
+在 `config.yaml` 中设置：
 
-- `onnx_provider = "cuda"`：使用 CUDA 执行提供者（需已安装 GPU 版 sherpa-onnx）。
-- `onnx_provider = "cpu"`：强制 CPU（与 PyPI 默认轮子行为一致）。
+- `onnx_provider: cuda`：使用 CUDA 执行提供者（需已安装 GPU 版 sherpa-onnx）。
+- `onnx_provider: cpu`：强制 CPU（与 PyPI 默认轮子行为一致）。
 
 启动日志中会打印 `正在加载语音模型 (CUDA)...` 或 `(CPU)...`，便于确认当前后端。
 
@@ -660,77 +660,59 @@ SHERPA_ONNX_CMAKE_ARGS="-DSHERPA_ONNX_ENABLE_GPU=ON -DSHERPA_ONNX_LINUX_ARM64_GP
 
 ## 配置说明
 
-所有参数集中在 `config.py` 的 `RobotConfig` dataclass 中，修改后无需改动业务代码：
+所有运行时参数集中在项目根目录的 **`config.yaml`** 中，修改后重启生效；也可通过 Web 监控面板实时调整。敏感字段（API Key）不写入文件，通过环境变量注入。
 
-```python
-@dataclass
-class RobotConfig:
-    # === 唤醒模式 ===
-    # "software": sherpa-onnx KWS 软件唤醒
-    # "hardware": RK3328 降噪板硬件唤醒
-    wake_mode: str = "software"
+```yaml
+# --- 模型路径 ---
+asr_model_dir: model/voice_models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20
+kws_model_dir: model/voice_models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
+tts_model_dir: model/voice_models/vits-zh-hf-fanchen-C
+vad_model_path: model/voice_models/silero_vad.onnx
 
-    # === 硬件唤醒 (RK3328 降噪板) ===
-    hw_serial_port: str = "/dev/ttyUSB0"
-    hw_serial_baudrate: int = 115200
-    hw_mic_array: str = "mic6_circle"   # mic4 / mic6 / mic6_circle
+# --- 唤醒词 (KWS) ---
+kws_keywords_file: model/voice_models/.../keywords.txt
+kws_keywords_threshold: 0.25
 
-    # === 唤醒词 (KWS, 仅 software 模式) ===
-    kws_keywords_file: str = "..."
-    kws_keywords_threshold: float = 0.25
+# --- ASR 后端 ---
+asr_backend: local          # "local" | "iflytek_cloud"
 
-    # === TTS 音色 ===
-    # aishell3: sid 0-173, 共 174 种音色
-    tts_speaker_id: int = 21
-    tts_speed: float = 1.0
-    tts_max_chars_per_chunk: int = 120  # 长文本自动分段
-    tts_pause_seconds: float = 0.15     # 段间停顿
+# --- TTS ---
+tts_backend: iflytek_cloud  # "local" | "iflytek_cloud"
+tts_speed: 1.2
+tts_volume: 1.0
 
-    # === VAD (语音活动检测) ===
-    vad_threshold: float = 0.5
-    vad_min_silence_duration: float = 0.25
-    vad_min_speech_duration: float = 0.25
+# --- VAD ---
+vad_threshold: 0.5
+vad_min_silence_duration: 0.25
 
-    # === 对话 ===
-    dialog_timeout: float = 15.0        # VAD 无活动超时 (秒)
+# --- 对话 ---
+dialog_timeout: 15.0
 
-    # === 相机 ===
-    camera_index: int = 4               # /dev/video 设备索引
-    camera_save_dir: str = "captures"   # 照片/视频保存目录
-    camera_record_seconds: float = 10.0 # 视频录制时长 (秒)
+# --- 相机 ---
+camera_index: 0
+camera_save_dir: captures
+camera_record_seconds: 10.0
 
-    # === LLM ===
-    # provider: "ollama" | "openai" | "deepseek" | "anthropic"
-    llm_provider: str = "ollama"
-    llm_model: str = "qwen2.5:3b"
-    llm_base_url: str = "http://localhost:11434"
-    llm_api_key: str = ""               # 在线模型的 API Key
-    llm_system_prompt: str = "..."
-    llm_max_history: int = 10           # 保留最近 N 轮对话历史
+# --- LLM ---
+llm_provider: ollama        # "ollama" | "openai" | "deepseek" | "anthropic"
+llm_model: qwen2.5:0.5b
+llm_base_url: http://localhost:11434
+llm_max_history: 10
+llm_system_prompt: |
+  你是一个机器人语音助手...
 
-    # === 任务规划器 (LLM Function Calling) ===
-    use_llm_planner: bool = False       # True 启用多指令规划
-    planner_system_prompt: str = "..."
+# --- 任务规划器 ---
+use_llm_planner: false      # true 启用 LLM 多指令规划
 
-    # === 意图关键词映射 (仅关键词匹配模式) ===
-    intent_patterns: dict = {
-        "take_photo":    ["拍照", "拍张照", "拍个照", ...],
-        "record_video":  ["录像", "录制视频", ...],
-        "robot_arm":     ["机械臂", "抓取", ...],
-        "navigation":    ["导航", "前往", ...],
-        "exit":          ["退出", "结束", "停止", "没事了"],
-    }
+# --- 意图关键词映射 ---
+intent_patterns:
+  take_photo: [拍照, 拍张照, ...]
+  record_video: [录像, 录制视频, ...]
+  exit: [退出, 结束, 停止, 没事了]
 
-    # === TTS 响应模板 ===
-    tts_responses: dict = {
-        "wakeup":  "我在，请说。",
-        "timeout": "没有听到您的命令，有需要可以再叫我。",
-    }
-
-    # === 系统 ===
-    tick_interval: float = 0.05         # 主循环 tick 间隔
-    num_threads: int = 2                # 模型推理线程数
-    onnx_provider: str = "cuda"         # ONNX: "cuda" | "cpu"（GPU 需源码编译的 sherpa-onnx）
+# --- 系统 ---
+onnx_provider: cpu          # "cuda" | "cpu"
+num_threads: 2
 ```
 
 ---
@@ -753,11 +735,11 @@ export XFYUN_TTS_API_KEY="your_tts_api_key"
 export XFYUN_TTS_API_SECRET="your_tts_api_secret"
 ```
 
-2) 在 `config.py` 里切换后端：
+2) 在 `config.yaml` 里切换后端：
 
-- `asr_backend = "iflytek_cloud"` 启用云端 ASR（`cloud_asr_strategy` 支持 `streaming`/`endpoint_once`）
-- `tts_backend = "iflytek_cloud"` 启用云端 TTS
-- `cloud_asr_fallback_to_local = True`、`cloud_tts_fallback_to_local = True` 开启失败回落本地
+- `asr_backend: iflytek_cloud` 启用云端 ASR（`cloud_asr_strategy` 支持 `streaming`/`endpoint_once`）
+- `tts_backend: iflytek_cloud` 启用云端 TTS
+- `cloud_asr_fallback_to_local: true`、`cloud_tts_fallback_to_local: true` 开启失败回落本地
 
 3) 协议要点（已在代码中处理）：
 
@@ -781,7 +763,7 @@ uv run main.py
 - 说 **"退出" / "结束" / "停止" / "没事了"** → 播放告别语后回到待机
 - VAD 检测到持续静默超过 `dialog_timeout` (默认 15s) → 播放超时提示后回到待机
 
-若启用 LLM 规划器模式，需在 `config.py` 中设置 `use_llm_planner = True`，此时支持一句话多指令（如"先拍张照再导航到客厅"）。
+若启用 LLM 规划器模式，需在 `config.yaml` 中设置 `use_llm_planner: true`，此时支持一句话多指令（如"先拍张照再导航到客厅"）。
 
 ---
 

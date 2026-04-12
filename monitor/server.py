@@ -14,6 +14,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
+from config import save_config
+
 # Vue build 产物目录（与本文件同级的 dist/）
 _DIST_DIR = Path(__file__).parent / "dist"
 
@@ -123,6 +125,10 @@ class MonitorServer:
                     rejected.append(key)
             if applied:
                 logger.info(f"[Monitor] 配置已更新: {list(applied.keys())}")
+                try:
+                    save_config(self._config)
+                except Exception as exc:
+                    logger.warning(f"[Monitor] 配置持久化失败: {exc}")
             return {"applied": applied, "rejected": rejected}
 
         # ── WebSocket ────────────────────────────────────────────────

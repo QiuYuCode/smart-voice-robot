@@ -146,6 +146,7 @@ def create_tree(
     )
     # 根据配置选择唤醒节点
     if config.wake_mode == "hardware":
+        # DEPRECATED: RK3328 硬件唤醒已弃用
         wake_node = HardwareWakeWord("WakeWord", engine)
     else:
         wake_node = WaitForWakeWord("WakeWord", engine)
@@ -203,9 +204,6 @@ def main():
     logger.info(f"  唤醒模式: {config.wake_mode}")
     if config.wake_mode == "software":
         logger.info(f"  唤醒词文件: {config.kws_keywords_file}")
-    else:
-        logger.info(f"  串口设备: {config.hw_serial_port}")
-        logger.info(f"  麦克风阵列: {config.hw_mic_array}")
     logger.info(f"  TTS 音色 ID: {config.tts_speaker_id}")
     logger.info(f"  LLM 模型: {config.llm_model}")
     mode_label = "LLM 多指令规划" if config.use_llm_planner else "关键词匹配"

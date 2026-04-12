@@ -88,7 +88,7 @@ def execute_describe_scene(config: RobotConfig, question: str = "请描述你看
     response = vlm.invoke(messages)
 
     desc = response.content
-    logger.info("视觉分析完成: %s (图片: %s)", desc[:80], filepath or "未保存")
+    logger.info("视觉分析完成: {} (图片: {})", desc[:80], filepath or "未保存")
     return desc
 
 

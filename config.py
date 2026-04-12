@@ -169,12 +169,12 @@ class RobotConfig:
     # --- VLM (视觉语言模型) ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
     vlm_provider: str = "ollama"
-    vlm_model: str = "qwen2.5:0.5b"
+    vlm_model: str = "qwen3.5:0.8b"
     vlm_base_url: str = "http://localhost:11434"
     vlm_api_key: str = ""
     vlm_system_prompt: str = (
         "你是一个机器人的视觉系统。根据图片内容，用简短自然的中文描述你看到的场景。\n"
-        "用第一人称：我"
+        "用第一人称：我看到了。\n"
         "禁止输出 emoji、表情符号、markdown 格式。\n"
     )
 

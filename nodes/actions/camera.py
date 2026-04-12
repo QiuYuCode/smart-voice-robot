@@ -122,7 +122,7 @@ def capture_frame_as_base64(config: RobotConfig, save_copy: bool = True) -> tupl
             filename = f"photo_{_timestamp()}.jpg"
             filepath = str(save_dir / filename)
             cv2.imwrite(filepath, frame)
-            logger.info("视觉拍照已保存: %s", filepath)
+            logger.info("视觉拍照已保存: {}", filepath)
 
         return b64, filepath
     finally:
@@ -148,7 +148,7 @@ def execute_take_photo(config: RobotConfig) -> str:
         filepath = save_dir / filename
         cv2.imwrite(str(filepath), frame)
 
-        logger.info("照片已保存: %s", filepath)
+        logger.info("照片已保存: {}", filepath)
         return "拍照成功，照片已保存。"
     finally:
         cap.release()
@@ -184,7 +184,7 @@ def execute_record_video(config: RobotConfig, duration: float | None = None) -> 
         if not writer.isOpened():
             raise RuntimeError("视频录制初始化失败。")
 
-        logger.info("开始录制: %.0fs, %dx%d@%.0ffps", duration, w, h, fps)
+        logger.info("开始录制: {:.0f}s, {}x{}@{:.0f}fps", duration, w, h, fps)
 
         for _ in range(30):
             cap.read()
@@ -199,7 +199,7 @@ def execute_record_video(config: RobotConfig, duration: float | None = None) -> 
         writer.release()
         elapsed = time.monotonic() - start
 
-        logger.info("视频已保存: %s (%.1fs)", filepath, elapsed)
+        logger.info("视频已保存: {} ({:.1f}s)", filepath, elapsed)
         return f"视频录制完成，共 {elapsed:.0f} 秒，已保存。"
     finally:
         cap.release()

@@ -18,7 +18,7 @@ def execute_robot_arm(action: str) -> str:
 
     TODO: 通过串口 / ROS service / GPIO 等方式控制
     """
-    logger.info("执行机械臂控制: %s", action)
+    logger.info("执行机械臂控制: {}", action)
     # TODO: 实际机械臂控制实现
     return f"机械臂指令已发送: {action}。"
 

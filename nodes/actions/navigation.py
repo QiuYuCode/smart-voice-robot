@@ -18,7 +18,7 @@ def execute_navigate(destination: str) -> str:
 
     TODO: 通过 ROS topic / service / action 发布导航目标
     """
-    logger.info("执行导航: %s", destination)
+    logger.info("执行导航: {}", destination)
     # TODO: 实际 ROS 导航实现
     return f"好的，正在前往{destination}。"
 

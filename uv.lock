@@ -863,6 +863,7 @@ wheels = [
 
 [[package]]
 name = "pyagxarm"
+version = "1.0.0"
 source = { directory = "../pyAgxArm" }
 dependencies = [
     { name = "python-can" },
@@ -1275,7 +1276,7 @@ wheels = [
 
 [[package]]
 name = "sherpa-onnx"
-version = "1.12.35"
+version = "1.12.33"
 source = { directory = "../sherpa-onnx" }
 
 [[package]]

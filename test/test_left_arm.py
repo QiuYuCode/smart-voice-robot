@@ -11,8 +11,9 @@ def main():
     left_robot.connect()
     
     # 重置机械臂
-    # left_robot.reset()
-    # left_robot.enable()
+    left_robot.reset()
+    time.sleep(3)
+    left_robot.enable()
     
     # 设置机械臂为正常模式
     # left_robot.set_normal_mode()
@@ -67,8 +68,14 @@ def main():
     #     time.sleep(0.1)
     
     # 读取机械臂状态
-    arm_status = left_robot.get_arm_status()
-    pprint(arm_status)
+    # arm_status = left_robot.get_arm_status()
+    # while True:
+    #     arm_status = left_robot.get_arm_status()
+    #     if arm_status is not None:
+    #         pprint(arm_status.msg.motion_status)
+    #     time.sleep(0.005)
+    
+    # 
     
 if __name__ == "__main__":
     main()

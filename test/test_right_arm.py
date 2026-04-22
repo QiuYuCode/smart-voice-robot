@@ -20,7 +20,7 @@ def main():
     #     time.sleep(0.1)
     
     # 设置机械臂为正常模式
-    right_robot.set_normal_mode()
+    # right_robot.set_normal_mode()
     
     # 设置机械臂为主模式
     # time.sleep(3)
@@ -30,7 +30,7 @@ def main():
     # right_robot.set_follower_mode()
     
     # 紧急停止机械臂
-    # right_robot.electronic_emergency_stop()
+    right_robot.electronic_emergency_stop()
     
 
     # 获取从臂/普通模式下的关节角度
@@ -58,7 +58,7 @@ def main():
     # 控制机械臂运动
     # right_robot.set_speed_percent(20)
     # # 以左臂为参照，右臂的 1 ， 3 ， 5, 6 关节角度与左臂相反
-    right_robot.move_j([-0.1, 0.5, -0.2, 0.2, -0.5, -0.5, 0.5])
+    # right_robot.move_j([-0.1, 0.5, -0.2, 0.2, -0.5, -0.5, 0.5])
     # # right_robot.move_j([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     
     # time.sleep(0.5)

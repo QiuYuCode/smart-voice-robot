@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "fastapi",
+#     "uvicorn",
+#     "opencv-python",
+# ]
+# ///
 """
 远端多路摄像头 FastAPI 服务。
 
@@ -8,29 +16,58 @@
 
 每路相机一个后台抓帧线程，避免 MJPEG 流阻塞 snapshot。
 
-运行示例:
-    pip install fastapi uvicorn opencv-python
-    python remote_camera_server.py \\
+脚本头部使用 PEP 723 内联声明依赖，可直接用 `uv run --script` 跑，
+不需要额外建 pyproject.toml 或手动 pip install。
+
+-----------------------------------------------------------------------------
+部署 (uv, 推荐)
+-----------------------------------------------------------------------------
+    # 把脚本拷到远端
+    scp remote_camera_server.py create@10.168.1.101:/home/create/WorkSpace/micro_server/
+
+    # 远端首次运行 (uv 会自动建 venv 并解析 PEP 723 依赖)
+    ssh create@10.168.1.101
+    cd /home/create/WorkSpace/micro_server
+    uv run --script remote_camera_server.py \\
         --host 0.0.0.0 --port 8080 \\
-        --camera head:4:640x480@30 \\
+        --camera head:4 \\
         --camera left_palm:0 \\
         --camera right_palm:2
 
-systemd unit 示例 (保存为 /etc/systemd/system/camera-server.service):
+-----------------------------------------------------------------------------
+systemd unit (开机自启)
+-----------------------------------------------------------------------------
+在远端执行 (注意用 sudo tee 绕开 vim 权限问题，路径是 /etc/systemd/system/)：
+
+    sudo tee /etc/systemd/system/camera-server.service > /dev/null <<'EOF'
     [Unit]
     Description=Smart Voice Robot Camera Server
     After=network.target
 
     [Service]
+    Type=simple
     User=create
-    WorkingDirectory=/home/create
-    ExecStart=/usr/bin/python3 /home/create/remote_camera_server.py \\
-        --host 0.0.0.0 --port 8080 \\
-        --camera head:4 --camera left_palm:0 --camera right_palm:2
+    WorkingDirectory=/home/create/WorkSpace/micro_server
+    Environment=HOME=/home/create
+    Environment=PATH=/home/create/.local/bin:/usr/local/bin:/usr/bin:/bin
+    ExecStart=/home/create/.local/bin/uv run --script remote_camera_server.py --host 0.0.0.0 --port 8080 --camera head:4 --camera left_palm:0 --camera right_palm:2
     Restart=on-failure
+    RestartSec=3
 
     [Install]
     WantedBy=multi-user.target
+    EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now camera-server.service
+    sudo systemctl status camera-server.service
+    journalctl -u camera-server.service -f
+
+注意:
+    - 路径是 /etc/systemd/system/ (不是 /etc/system/)，前面必须 sudo。
+    - uv 的绝对路径用 `which uv` 结果填，systemd 不继承 shell PATH。
+    - Environment=HOME 不能省：uv 需要 $HOME/.cache/uv。
+    - ExecStart 必须单行 (不要反斜杠换行)。
 """
 
 from __future__ import annotations

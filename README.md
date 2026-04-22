@@ -747,31 +747,77 @@ num_threads: 2
 
 > 关键词匹配按 `intent_patterns` 插入顺序命中；`describe_left_palm` / `describe_right_palm` 必须写在 `describe_scene` 之前，否则"看看左手"会先被 `describe_scene` 的"看看"吃掉。
 
-### 后端 1：HTTP (无 ROS 依赖)
+### 后端 1：HTTP (无 ROS 依赖，推荐)
 
-远端跑 `scripts/remote_camera_server.py`：
+`scripts/remote_camera_server.py` 顶部使用 PEP 723 内联依赖声明，`uv run --script` 会自动创建 venv 并装 fastapi/uvicorn/opencv-python，**不需要手动 pip install 或建 pyproject.toml**。
+
+**部署脚本到远端：**
 
 ```bash
-# 远端 10.168.1.101
-pip install fastapi uvicorn opencv-python
-python3 remote_camera_server.py \
-    --host 0.0.0.0 --port 8080 \
-    --camera head:4:640x480@30 \
-    --camera left_palm:0 \
-    --camera right_palm:2
+scp scripts/remote_camera_server.py create@10.168.1.101:/home/create/WorkSpace/micro_server/
+```
 
-# 本地验证
+**远端手动跑一次验证：**
+
+```bash
+ssh create@10.168.1.101
+cd /home/create/WorkSpace/micro_server
+uv run --script remote_camera_server.py \
+    --host 0.0.0.0 --port 8080 \
+    --camera head:4 --camera left_palm:0 --camera right_palm:2
+```
+
+**本地验证能拿到帧：**
+
+```bash
 curl http://10.168.1.101:8080/cameras
 curl http://10.168.1.101:8080/snapshot/head -o head.jpg
 curl http://10.168.1.101:8080/snapshot/left_palm -o left.jpg
 ```
 
-`config.yaml` 配置：
+**`config.yaml` 配置：**
 
 ```yaml
 camera_backend: http
 camera_http_base_url: http://10.168.1.101:8080
 ```
+
+#### 开机自启 (systemd)
+
+在远端执行（用 `sudo tee` 避开 vim 权限问题，路径一定是 `/etc/systemd/system/`，不是 `/etc/system/`）：
+
+```bash
+sudo tee /etc/systemd/system/camera-server.service > /dev/null <<'EOF'
+[Unit]
+Description=Smart Voice Robot Camera Server
+After=network.target
+
+[Service]
+Type=simple
+User=create
+WorkingDirectory=/home/create/WorkSpace/micro_server
+Environment=HOME=/home/create
+Environment=PATH=/home/create/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/create/.local/bin/uv run --script remote_camera_server.py --host 0.0.0.0 --port 8080 --camera head:4 --camera left_palm:0 --camera right_palm:2
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now camera-server.service
+sudo systemctl status camera-server.service
+journalctl -u camera-server.service -f
+```
+
+要点：
+
+- `uv` 的绝对路径用 `which uv` 结果填（通常 `/home/create/.local/bin/uv`）；systemd 不继承 shell `PATH`。
+- `Environment=HOME=...` 不能省，`uv` 需要 `$HOME/.cache/uv` 缓存目录。
+- `ExecStart` **必须单行**，不要用反斜杠换行。
+- 首次 `enable --now` 时 uv 会同步依赖，第一次 `status` 可能显示 `activating`，等 10~30 秒再看。
 
 ### 后端 2：ROS 2 (rclpy)
 

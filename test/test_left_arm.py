@@ -13,7 +13,7 @@ def main():
     # 重置机械臂
     # left_robot.reset()
     # time.sleep(3)
-    left_robot.enable()
+    # left_robot.enable()
     
     # 设置机械臂为正常模式
     # left_robot.set_normal_mode()
@@ -25,7 +25,7 @@ def main():
     # left_robot.set_follower_mode()
     
     # 紧急停止机械臂
-    # left_robot.electronic_emergency_stop()
+    left_robot.electronic_emergency_stop()
 
     # 获取从臂/普通模式下的关节角度
     # while True:

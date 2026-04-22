@@ -16,6 +16,7 @@
 - [依赖与安装](#依赖与安装)
 - [sherpa-onnx GPU 编译（可选）](#sherpa-onnx-gpu-编译可选)
 - [配置说明](#配置说明)
+- [远端摄像头（三路）](#远端摄像头三路)
 - [运行](#运行)
 - [CLI 测试工具](#cli-测试工具)
 
@@ -688,10 +689,16 @@ vad_min_silence_duration: 0.25
 # --- 对话 ---
 dialog_timeout: 15.0
 
-# --- 相机 ---
-camera_index: 0
+# --- 相机 (三路: head / left_palm / right_palm) ---
+camera_backend: http           # "local" | "http" | "ros"
+default_camera: head
+camera_http_base_url: http://10.168.1.101:8080
 camera_save_dir: captures
 camera_record_seconds: 10.0
+cameras:
+  head:       { index: 4, width: 640, height: 480, ros_topic: /camera/color/image_raw }
+  left_palm:  { index: 0, width: 640, height: 480, ros_topic: /left_gripper/image_raw }
+  right_palm: { index: 2, width: 640, height: 480, ros_topic: /right_gripper/image_raw }
 
 # --- LLM ---
 llm_provider: ollama        # "ollama" | "openai" | "deepseek" | "anthropic"
@@ -706,7 +713,10 @@ use_llm_planner: false      # true 启用 LLM 多指令规划
 
 # --- 意图关键词映射 ---
 intent_patterns:
-  take_photo: [拍照, 拍张照, ...]
+  describe_left_palm:  [左手里, 左爪, 左夹爪, 左掌心, 左手拿, 看看左]
+  describe_right_palm: [右手里, 右爪, 右夹爪, 右掌心, 右手拿, 看看右]
+  describe_scene:      [看看, 这是什么, 前面有什么]
+  take_photo:  [拍照, 拍张照, ...]
   record_video: [录像, 录制视频, ...]
   exit: [退出, 结束, 停止, 没事了]
 
@@ -714,6 +724,102 @@ intent_patterns:
 onnx_provider: cpu          # "cuda" | "cpu"
 num_threads: 2
 ```
+
+---
+
+## 远端摄像头（三路）
+
+系统管理三路相机，全部默认挂在远端机 `10.168.1.101`：
+
+| camera_id    | 用途              | local 后端 index | ROS topic                       |
+| ------------ | ----------------- | ---------------- | ------------------------------- |
+| `head`       | 头部 RealSense 彩色 | 4                | `/camera/color/image_raw`       |
+| `left_palm`  | 左夹爪掌心       | 0                | `/left_gripper/image_raw`       |
+| `right_palm` | 右夹爪掌心       | 2                | `/right_gripper/image_raw`      |
+
+实际索引以远端 `v4l2-ctl --list-devices` 结果为准，在 `config.yaml` 的 `cameras.{id}.index` 中修改。
+
+### 语音意图路由
+
+- "看看"/"前面有什么" → `describe_scene` → **head**
+- "看看左手拿的什么"/"左掌心" → `describe_left_palm` → **left_palm**
+- "看看右爪里的" → `describe_right_palm` → **right_palm**
+
+> 关键词匹配按 `intent_patterns` 插入顺序命中；`describe_left_palm` / `describe_right_palm` 必须写在 `describe_scene` 之前，否则"看看左手"会先被 `describe_scene` 的"看看"吃掉。
+
+### 后端 1：HTTP (无 ROS 依赖)
+
+远端跑 `scripts/remote_camera_server.py`：
+
+```bash
+# 远端 10.168.1.101
+pip install fastapi uvicorn opencv-python
+python3 remote_camera_server.py \
+    --host 0.0.0.0 --port 8080 \
+    --camera head:4:640x480@30 \
+    --camera left_palm:0 \
+    --camera right_palm:2
+
+# 本地验证
+curl http://10.168.1.101:8080/cameras
+curl http://10.168.1.101:8080/snapshot/head -o head.jpg
+curl http://10.168.1.101:8080/snapshot/left_palm -o left.jpg
+```
+
+`config.yaml` 配置：
+
+```yaml
+camera_backend: http
+camera_http_base_url: http://10.168.1.101:8080
+```
+
+### 后端 2：ROS 2 (rclpy)
+
+本地 **和** 远端都需安装 ROS 2 (同 DISTRO，比如 `humble`)。依赖由 apt 提供，不写入 `pyproject.toml`：
+
+```bash
+sudo apt install ros-humble-rclpy ros-humble-cv-bridge ros-humble-sensor-msgs
+```
+
+远端启动 RealSense 驱动 + 两个 `usb_cam` 节点（或自写 publisher），发布到三个 topic。
+
+本地：
+
+```bash
+source /opt/ros/humble/setup.bash
+cd /home/create/WorkSpace/smart-voice-robot
+.venv/bin/python main.py
+```
+
+`config.yaml` 配置：
+
+```yaml
+camera_backend: ros
+camera_ros_node_name: smart_voice_robot_camera_sub
+camera_ros_warmup_seconds: 2.0
+cameras:
+  head:       { ros_topic: /camera/color/image_raw }
+  left_palm:  { ros_topic: /left_gripper/image_raw }
+  right_palm: { ros_topic: /right_gripper/image_raw }
+```
+
+> 三路相机共用同一个 rclpy Node 和后台 executor 线程，避免重复启动 context。
+
+### 后端 3：local (调试)
+
+所有相机 USB 直连到跑 `main.py` 的那台机器时使用。一般仅做开发调试：
+
+```yaml
+camera_backend: local
+cameras:
+  head:       { index: 0 }
+  left_palm:  { index: 2 }
+  right_palm: { index: 4 }
+```
+
+### 存盘命名
+
+`captures/photo_{camera_id}_YYYYMMDD_HHMMSS.jpg`、`captures/video_{camera_id}_...mp4`，三路相机互不覆盖。
 
 ---
 

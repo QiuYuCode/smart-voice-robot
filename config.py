@@ -147,12 +147,48 @@ class RobotConfig:
     interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断
 
     # --- 相机 ---
-    camera_index: int = 0  # /dev/video 设备索引 (0=普通摄像头, 4=RealSense 彩色流)
-    camera_width: int = 640
-    camera_height: int = 480
-    camera_save_dir: str = "captures"  # 照片/视频保存目录 (相对于项目根目录)
-    camera_record_seconds: float = 10.0  # 视频录制时长 (秒)
-    camera_record_fps: float = 30.0  # 视频录制帧率 (相机未报告时使用)
+    # 三路相机统一管理: head (头部 RealSense) / left_palm / right_palm
+    # backend: "local" (本机 USB) | "http" (远端 FastAPI) | "ros" (rclpy 订阅)
+    camera_backend: str = "local"
+    default_camera: str = "head"  # describe_scene / take_photo / record_video 默认使用的相机
+
+    # HTTP 后端: 远端 FastAPI 服务基址，URL 形如 {base}/snapshot/{camera_id}
+    camera_http_base_url: str = ""          # e.g. http://10.168.1.101:8080
+    camera_http_timeout: float = 5.0
+
+    # ROS 后端 (rclpy + cv_bridge)
+    camera_ros_node_name: str = "smart_voice_robot_camera_sub"
+    camera_ros_qos_depth: int = 5
+    camera_ros_warmup_seconds: float = 2.0  # 启动时等待首帧的超时
+
+    # 每台相机的规格; YAML 中通过 cameras.{id}.{field} 覆盖
+    cameras: dict[str, dict[str, Any]] = field(default_factory=lambda: {
+        "head": {
+            "index": 4,
+            "width": 640,
+            "height": 480,
+            "ros_topic": "/camera/color/image_raw",
+            "record_fps": 30.0,
+        },
+        "left_palm": {
+            "index": 0,
+            "width": 640,
+            "height": 480,
+            "ros_topic": "/left_gripper/image_raw",
+            "record_fps": 30.0,
+        },
+        "right_palm": {
+            "index": 2,
+            "width": 640,
+            "height": 480,
+            "ros_topic": "/right_gripper/image_raw",
+            "record_fps": 30.0,
+        },
+    })
+
+    # 通用相机参数
+    camera_save_dir: str = "captures"           # 照片/视频保存目录 (相对于项目根目录)
+    camera_record_seconds: float = 10.0         # 视频录制时长 (秒)
 
     # --- LLM ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
@@ -271,15 +307,47 @@ def load_config(path: Path | str | None = None) -> RobotConfig:
     if yaml_path.exists():
         with open(yaml_path, encoding="utf-8") as f:
             data: dict[str, Any] = yaml.safe_load(f) or {}
+
+        # 旧版平铺相机字段 → 迁移到 cameras.head.*
+        _LEGACY_CAMERA_MAP = {
+            "camera_index": "index",
+            "camera_width": "width",
+            "camera_height": "height",
+            "camera_record_fps": "record_fps",
+        }
+        legacy_head_overrides: dict[str, Any] = {}
+        for legacy_key, new_key in _LEGACY_CAMERA_MAP.items():
+            if legacy_key in data:
+                legacy_head_overrides[new_key] = data.pop(legacy_key)
+                logger.warning(
+                    f"[config] {legacy_key!r} 已废弃，已自动映射到 cameras.head.{new_key}；"
+                    f"请在 config.yaml 中迁移到新结构。"
+                )
+
         for key, value in data.items():
             if key in _SECRET_FIELDS:
                 continue
             if not hasattr(cfg, key):
                 logger.warning(f"[config] 忽略未知配置项: {key!r}")
                 continue
+            if key == "cameras" and isinstance(value, dict):
+                # 与默认字典合并，YAML 只需覆盖需要的相机/字段
+                merged = {cid: dict(spec) for cid, spec in cfg.cameras.items()}
+                for cid, spec in value.items():
+                    if not isinstance(spec, dict):
+                        logger.warning(f"[config] cameras.{cid} 应为 dict，忽略: {spec!r}")
+                        continue
+                    merged.setdefault(cid, {}).update(spec)
+                value = merged
             if key in _PATH_FIELDS and isinstance(value, str) and not Path(value).is_absolute():
                 value = str(base_dir / value)
             setattr(cfg, key, value)
+
+        if legacy_head_overrides:
+            head_spec = dict(cfg.cameras.get("head", {}))
+            head_spec.update(legacy_head_overrides)
+            cfg.cameras["head"] = head_spec
+
         logger.debug(f"[config] 已从 {yaml_path} 加载配置")
     else:
         logger.debug(f"[config] 配置文件不存在，使用内置默认值: {yaml_path}")

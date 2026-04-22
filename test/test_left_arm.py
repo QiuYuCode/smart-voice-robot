@@ -11,8 +11,8 @@ def main():
     left_robot.connect()
     
     # 重置机械臂
-    left_robot.reset()
-    time.sleep(3)
+    # left_robot.reset()
+    # time.sleep(3)
     left_robot.enable()
     
     # 设置机械臂为正常模式
@@ -52,7 +52,7 @@ def main():
     # 控制机械臂运动
     # left_robot.set_speed_percent(20)
     # 以左臂为参照，右臂的 1 ， 3 ， 5, 6 关节角度与左臂相反
-    # left_robot.move_j([0.1, 0.5, 0.2, 0.2, 0.5, 0.5, 0.5])
+    left_robot.move_j([0.1, 0.5, 0.2, 0.2, 0.5, 0.5, 0.5])
     # left_robot.move_j([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     
     # time.sleep(0.5)

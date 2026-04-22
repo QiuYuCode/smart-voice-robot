@@ -7,6 +7,7 @@ CLI 测试工具 - 模拟语音输入，测试意图识别和动作节点
 用法:
     python test/test_cli.py                      # 交互模式 (关键词匹配)
     python test/test_cli.py "帮我拍照"            # 单次模式
+    python test/test_cli.py --speak "你好"        # 直接 TTS 合成并播报
     python test/test_cli.py --planner             # LLM 多指令规划模式
     python test/test_cli.py --planner --tts       # 规划模式 + 语音播报
     python test/test_cli.py --provider deepseek   # 指定 LLM provider
@@ -328,6 +329,10 @@ def parse_args():
         "--tts", action="store_true",
         help="启用 TTS 语音播报 (默认关闭，仅打印文本)",
     )
+    parser.add_argument(
+        "--speak", default=None,
+        help="直接进行 TTS 文本播报并退出 (跳过行为树)",
+    )
     return parser.parse_args()
 
 
@@ -356,6 +361,16 @@ def main():
         config.llm_api_key = args.api_key
 
     py_trees.logging.level = py_trees.logging.Level.INFO
+
+    if args.speak is not None:
+        tts = _init_tts(config, True)
+        if not tts:
+            print("--- 直接 TTS 测试失败：TTS 初始化不可用 ---")
+            return
+        print(f"[你] {args.speak}")
+        print(f"[机器人] {args.speak}")
+        tts.speak_blocking(args.speak)
+        return
 
     tts = _init_tts(config, args.tts)
 

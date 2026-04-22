@@ -74,7 +74,7 @@ dialog_timeout: 15.0  # 秒，无活动后超时回到 idle
 interrupt_min_speech_seconds: 0.6  # TTS 启动后延迟启用打断
 
 # --- 相机 ---
-camera_index: 0  # /dev/video 设备索引 (0=普通摄像头, 4=RealSense 彩色流)
+camera_index: 4  # /dev/video 设备索引 (0=普通摄像头, 4=RealSense 彩色流)
 camera_width: 640
 camera_height: 480
 camera_save_dir: captures
@@ -84,8 +84,8 @@ camera_record_fps: 30.0
 # --- LLM ---
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"
 llm_provider: ollama
-llm_model: gemma4:e4b
-llm_base_url: http://localhost:11434
+llm_model: qwen2.5:0.5b
+llm_base_url: http://10.168.1.101:11434
 llm_max_history: 10
 llm_request_timeout: 30.0
 llm_system_prompt: |
@@ -100,7 +100,7 @@ llm_system_prompt: |
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"
 vlm_provider: ollama
 vlm_model: qwen3.5:0.8b
-vlm_base_url: http://localhost:11434
+vlm_base_url: http://10.168.1.101:11434
 vlm_system_prompt: |
   你是一个机器人的视觉系统。根据图片内容，用简短自然的中文描述你看到的场景。
   用第一人称：我看到了。

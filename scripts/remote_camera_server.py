@@ -28,11 +28,13 @@
     # 远端首次运行 (uv 会自动建 venv 并解析 PEP 723 依赖)
     ssh create@10.168.1.101
     cd /home/create/WorkSpace/micro_server
+    # 强烈建议用 /dev/v4l/by-path/... 持久化路径，防止 /dev/videoN 重启漂移。
+    # 路径含冒号，所以 --camera 用 '@' 分分辨率/帧率（不是旧的 ':WxH@fps'）。
     uv run --script remote_camera_server.py \\
         --host 0.0.0.0 --port 8080 \\
-        --camera head:4 \\
-        --camera left_palm:0 \\
-        --camera right_palm:2
+        --camera head:/dev/v4l/by-path/platform-3610000.usb-usb-0:3.1:1.3-video-index0 \\
+        --camera left_palm:/dev/v4l/by-path/platform-3610000.usb-usb-0:4.3:1.0-video-index0 \\
+        --camera right_palm:/dev/v4l/by-path/platform-3610000.usb-usb-0:4.4:1.0-video-index0
 
 -----------------------------------------------------------------------------
 systemd unit (开机自启)
@@ -50,7 +52,7 @@ systemd unit (开机自启)
     WorkingDirectory=/home/create/WorkSpace/micro_server
     Environment=HOME=/home/create
     Environment=PATH=/home/create/.local/bin:/usr/local/bin:/usr/bin:/bin
-    ExecStart=/home/create/.local/bin/uv run --script remote_camera_server.py --host 0.0.0.0 --port 8080 --camera head:4 --camera left_palm:0 --camera right_palm:2
+    ExecStart=/home/create/.local/bin/uv run --script remote_camera_server.py --host 0.0.0.0 --port 8080 --camera head:/dev/v4l/by-path/platform-3610000.usb-usb-0:3.1:1.3-video-index0 --camera left_palm:/dev/v4l/by-path/platform-3610000.usb-usb-0:4.3:1.0-video-index0 --camera right_palm:/dev/v4l/by-path/platform-3610000.usb-usb-0:4.4:1.0-video-index0
     Restart=on-failure
     RestartSec=3
 
@@ -90,10 +92,19 @@ from fastapi.responses import StreamingResponse
 @dataclass
 class CameraConfig:
     camera_id: str
-    index: int
+    # int: 走 cv2.VideoCapture(index)，对应 /dev/videoN 的 N；不稳定，重启易漂。
+    # str: 设备路径，如 /dev/video8 或 /dev/v4l/by-id/usb-xxx-video-index0。
+    #      推荐用 by-id 路径，udev 会把它永久绑定到同一只物理相机。
+    source: int | str
     width: int = 640
     height: int = 480
     fps: float = 30.0
+
+    @property
+    def source_str(self) -> str:
+        if isinstance(self.source, int):
+            return f"/dev/video{self.source}"
+        return str(self.source)
 
 
 def _preferred_backend() -> int:
@@ -114,25 +125,64 @@ class CameraWorker:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        self._open()
+        self._open(verify_read=True)
         self._thread = threading.Thread(
             target=self._loop, name=f"cam-{self.cfg.camera_id}", daemon=True,
         )
         self._thread.start()
 
-    def _open(self) -> None:
-        cap = cv2.VideoCapture(self.cfg.index, _preferred_backend())
+    def _open(self, verify_read: bool = False) -> None:
+        """打开相机；verify_read=True 时先连读几帧验证真实可用。
+
+        某些 UVC 复合设备（RealSense 的深度/元数据子节点、带 HDMI 回采的
+        capture 卡等）会让 `cap.isOpened()` 返回 True，但 `cap.read()` 永远
+        失败。启动阶段加一个 warmup 把这种伪成功挡掉，避免上线后才 503。
+        """
+        cap = cv2.VideoCapture(self.cfg.source, _preferred_backend())
         if not cap.isOpened():
             raise RuntimeError(
-                f"无法打开相机 {self.cfg.camera_id} (index={self.cfg.index})"
+                f"无法打开相机 {self.cfg.camera_id} "
+                f"(source={self.cfg.source_str})"
             )
+        # 优先请求 MJPEG 传输：同一 USB 2.0 hub 上双相机走 YUYV 裸流 (~18MB/s/路)
+        # 会撞带宽，导致其中一路 select() timeout。MJPG ~1-2MB/s，两路轻松塞下。
+        # 必须在设 resolution 之前 set fourcc，否则 V4L2 不生效。
+        if hasattr(cv2, "CAP_PROP_FOURCC"):
+            mjpg = cv2.VideoWriter_fourcc(*"MJPG")
+            cap.set(cv2.CAP_PROP_FOURCC, mjpg)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
         if hasattr(cv2, "CAP_PROP_BUFFERSIZE"):
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        if verify_read:
+            ok_any = False
+            for _ in range(10):
+                ok, frame = cap.read()
+                if ok and frame is not None:
+                    ok_any = True
+                    break
+            if not ok_any:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"相机 {self.cfg.camera_id} 打开成功但读帧全失败 "
+                    f"({self.cfg.source_str})；"
+                    f"很可能该节点是 metadata 子节点或设备被占用。"
+                )
+
         self._cap = cap
-        print(f"[{self.cfg.camera_id}] opened /dev/video{self.cfg.index} "
-              f"{self.cfg.width}x{self.cfg.height}")
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc_int = int(cap.get(cv2.CAP_PROP_FOURCC)) if hasattr(cv2, "CAP_PROP_FOURCC") else 0
+        fourcc = "".join(chr((fourcc_int >> (8 * i)) & 0xFF) for i in range(4)) or "?"
+        print(
+            f"[{self.cfg.camera_id}] opened {self.cfg.source_str} "
+            f"requested={self.cfg.width}x{self.cfg.height} "
+            f"actual={actual_w}x{actual_h} fourcc={fourcc}"
+        )
 
     def _loop(self) -> None:
         period = 1.0 / max(1.0, self.cfg.fps)
@@ -210,29 +260,55 @@ class CameraWorker:
 
 def _parse_camera_arg(s: str) -> CameraConfig:
     """
-    解析 --camera 参数：
-        'head:4'                → id=head, index=4
-        'left_palm:0:640x480'   → +分辨率
-        'head:4:640x480@30'     → +fps
+    解析 --camera 参数，格式：
+
+        id:<source>[@WxH][@fps]
+
+    source:
+        - 整数索引     : 'head:4'                      (对应 /dev/video4)
+        - 绝对设备路径 : 'head:/dev/video4'             (重启易漂)
+        - by-id 路径   : 'head:/dev/v4l/by-id/usb-...-video-index0'
+        - by-path 路径 : 'head:/dev/v4l/by-path/platform-...-video-index0'
+
+    注意: by-path 的字符串本身含冒号（如 'usb-0:3.1:1.3-'），所以 id 与 source
+    只按 **第一个** ':' 切分；分辨率/帧率用 '@' 分隔（设备路径里不含 '@'）。
+
+    例子:
+        head:4
+        head:/dev/v4l/by-path/platform-3610000.usb-usb-0:3.1:1.3-video-index0
+        left_palm:/dev/v4l/by-path/platform-3610000.usb-usb-0:4.3:1.0-video-index0@640x480@30
     """
-    parts = s.split(":")
-    if len(parts) < 2:
+    if ":" not in s:
         raise argparse.ArgumentTypeError(
-            f"--camera 参数格式: id:index[:WxH[@fps]]，收到 {s!r}"
+            f"--camera 参数格式: id:<index|path>[@WxH[@fps]]，收到 {s!r}"
         )
-    cam_id, index_str = parts[0], parts[1]
+    cam_id, rest = s.split(":", 1)
+
+    tokens = rest.split("@")
+    source_raw = tokens[0]
+
     width, height, fps = 640, 480, 30.0
-    if len(parts) >= 3:
-        res = parts[2]
-        if "@" in res:
-            res, fps_str = res.split("@", 1)
-            fps = float(fps_str)
-        if "x" in res:
-            w, h = res.split("x", 1)
-            width, height = int(w), int(h)
+    for t in tokens[1:]:
+        t_low = t.lower()
+        if "x" in t_low and not t_low.endswith("x"):
+            w_str, h_str = t_low.split("x", 1)
+            width, height = int(w_str), int(h_str)
+        else:
+            fps = float(t)
+
+    try:
+        source: int | str = int(source_raw)
+    except ValueError:
+        if not source_raw.startswith("/"):
+            raise argparse.ArgumentTypeError(
+                f"--camera {cam_id}: source {source_raw!r} 既不是整数索引、"
+                f"也不是以 / 开头的绝对路径。"
+            )
+        source = source_raw
+
     return CameraConfig(
         camera_id=cam_id,
-        index=int(index_str),
+        source=source,
         width=width,
         height=height,
         fps=fps,
@@ -252,7 +328,7 @@ def create_app(cameras: dict[str, CameraWorker]) -> FastAPI:
             "cameras": [
                 {
                     "id": w.cfg.camera_id,
-                    "index": w.cfg.index,
+                    "source": w.cfg.source_str,
                     "width": w.cfg.width,
                     "height": w.cfg.height,
                     "fps": w.cfg.fps,
@@ -299,8 +375,8 @@ def main() -> None:
 
     cam_cfgs = args.camera or [
         CameraConfig("head", 4),
-        CameraConfig("left_palm", 0),
-        CameraConfig("right_palm", 2),
+        CameraConfig("left_palm", 6),
+        CameraConfig("right_palm", 8),
     ]
 
     workers: dict[str, CameraWorker] = {}

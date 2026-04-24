@@ -163,6 +163,26 @@ class LocalCameraSource(CameraSource):
 # HttpCameraSource
 # ============================================================================
 
+
+class _RetriableHttpError(Exception):
+    """远端 5xx 或连接异常，调用方可以据此决定是否重试。"""
+
+
+def _extract_detail(resp) -> str:
+    """尽力从 httpx.Response 里抽出 JSON 的 `detail` 字段，抽不到就返回原文。"""
+    try:
+        j = resp.json()
+    except Exception:
+        return (resp.text or "").strip()[:300]
+    if isinstance(j, dict):
+        detail = j.get("detail")
+        if isinstance(detail, str):
+            return detail
+        if detail is not None:
+            return str(detail)
+    return str(j)[:300]
+
+
 class HttpCameraSource(CameraSource):
     """
     通过远端 FastAPI 取流:
@@ -185,24 +205,96 @@ class HttpCameraSource(CameraSource):
         self._timeout = float(config.camera_http_timeout)
 
     def grab_frame(self, warmup_frames: int = 30) -> np.ndarray:
-        # httpx 作为传递依赖存在 (langchain-openai 依赖链)；失败则回退到 urllib
-        try:
-            import httpx
-            r = httpx.get(self._snapshot_url, timeout=self._timeout)
-            r.raise_for_status()
-            data = r.content
-        except ImportError:  # pragma: no cover
-            import urllib.request
-            with urllib.request.urlopen(self._snapshot_url, timeout=self._timeout) as resp:
-                data = resp.read()
-
+        # 远端 worker 刚启动 / 相机刚插上时第一次访问常返回 503，做有限重试。
+        # 503 / 504 / 连接异常 → 重试；4xx → 直接抛，不重试。
+        data = self._fetch_snapshot_with_retry(
+            max_attempts=3, backoff=0.5,
+        )
         arr = np.frombuffer(data, dtype=np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if frame is None:
             raise RuntimeError(
-                f"远端相机 {self.camera_id} 返回的数据无法解码 JPEG。"
+                f"远端相机 {self.camera_id} 返回的数据无法解码 JPEG "
+                f"(URL={self._snapshot_url}, bytes={len(data)})。"
             )
         return frame
+
+    def _fetch_snapshot_with_retry(
+        self, max_attempts: int = 3, backoff: float = 0.5,
+    ) -> bytes:
+        last_err: Exception | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return self._fetch_snapshot_once()
+            except _RetriableHttpError as e:
+                last_err = e
+                logger.warning(
+                    "远端相机 {} 第 {}/{} 次拉取失败 (可重试): {}",
+                    self.camera_id, attempt, max_attempts, e,
+                )
+                if attempt < max_attempts:
+                    time.sleep(backoff * attempt)
+                    continue
+                raise RuntimeError(str(e)) from e
+            except Exception as e:
+                # 非可重试（4xx / JPEG 解码等）直接抛
+                raise RuntimeError(str(e)) from e
+        # 理论上走不到
+        raise RuntimeError(
+            f"远端相机 {self.camera_id} 拉取失败: {last_err}"
+        )
+
+    def _fetch_snapshot_once(self) -> bytes:
+        try:
+            import httpx
+        except ImportError:  # pragma: no cover
+            return self._fetch_via_urllib()
+
+        try:
+            r = httpx.get(self._snapshot_url, timeout=self._timeout)
+        except httpx.RequestError as e:
+            raise _RetriableHttpError(
+                f"远端相机 {self.camera_id} 连接失败: {e} "
+                f"(URL={self._snapshot_url})"
+            ) from e
+
+        if r.status_code >= 400:
+            detail = _extract_detail(r)
+            msg = (
+                f"远端相机 {self.camera_id} HTTP {r.status_code}: {detail} "
+                f"(URL={self._snapshot_url})"
+            )
+            if r.status_code in (500, 502, 503, 504):
+                raise _RetriableHttpError(msg)
+            raise RuntimeError(msg)
+        return r.content
+
+    def _fetch_via_urllib(self) -> bytes:  # pragma: no cover
+        import urllib.error
+        import urllib.request
+        try:
+            with urllib.request.urlopen(
+                self._snapshot_url, timeout=self._timeout,
+            ) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            msg = (
+                f"远端相机 {self.camera_id} HTTP {e.code}: {body or e.reason} "
+                f"(URL={self._snapshot_url})"
+            )
+            if e.code in (500, 502, 503, 504):
+                raise _RetriableHttpError(msg) from e
+            raise RuntimeError(msg) from e
+        except urllib.error.URLError as e:
+            raise _RetriableHttpError(
+                f"远端相机 {self.camera_id} 连接失败: {e.reason} "
+                f"(URL={self._snapshot_url})"
+            ) from e
 
     def record_video(self, filepath: str, duration: float) -> float:
         cap = cv2.VideoCapture(self._stream_url)

@@ -41,17 +41,17 @@ cloud_asr_preroll_seconds: 0.3
 
 # --- TTS 音色 ---
 tts_speaker_id: 0
-tts_speed: 1.75
+tts_speed: 1.0
 tts_volume: 1.5  # 本地 TTS 音量增益，1.0=原始，>1.0 放大
 tts_max_chars_per_chunk: 80
 tts_sentence_pause: 0.40
 tts_clause_pause: 0.15
 # "local" | "iflytek_cloud"
-tts_backend: local
+tts_backend: iflytek_cloud
 cloud_tts_fallback_to_local: true
 
 # --- 讯飞云 TTS 配置 ---
-iflytek_tts_vcn: xiaoyan
+iflytek_tts_vcn: x4_yezi
 iflytek_tts_aue: raw
 iflytek_tts_auf: "audio/L16;rate=16000"
 iflytek_tts_speed: 50
@@ -115,7 +115,7 @@ camera_record_seconds: 10.0
 # --- LLM ---
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"
 llm_provider: ollama
-llm_model: qwen2.5:0.5b
+llm_model: deepseek-r1:1.5b
 llm_base_url: http://10.168.1.101:11434
 llm_max_history: 10
 llm_request_timeout: 30.0
@@ -149,6 +149,9 @@ planner_system_prompt: |
 # --- 意图关键词映射 ---
 intent_patterns:
   # 更具体的掌心意图放前面，先命中优先
+  back_to_origin: [回到坐标原点, 回到原点, 回原点]
+  arc_welding: [执行弧焊作业, 开始弧焊, 进行弧焊]
+  workbench_status_check: [开启工作台，检查运行状态, 开启工作台检查运行状态, 启动工作台检查运行状态]
   describe_left_palm: [左手里, 左爪, 左夹爪, 左掌心, 左手拿, 看看左]
   describe_right_palm: [右手里, 右爪, 右夹爪, 右掌心, 右手拿, 看看右]
   describe_scene: [看一下, 看看, 这是什么, 前面有什么, 描述一下, 看到了什么]
@@ -162,6 +165,9 @@ intent_patterns:
 tts_responses:
   wakeup: 我在，请说。
   timeout: 没有听到您的命令，有需要可以再叫我。
+  back_to_origin: 好的，正在回到坐标原点。
+  arc_welding: 正在执行弧焊作业，请注意安全。
+  workbench_status_check: 好的，正在启动工作台，检查运行状态。
 
 # --- 启动提示音 ---
 startup_sound_enabled: true

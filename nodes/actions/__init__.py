@@ -18,6 +18,7 @@ from nodes.actions.vision import (
 )
 from nodes.actions.back_to_wakeup import BackToWakeUp
 from nodes.actions.default_response import DefaultResponse
+from nodes.actions.fixed_response import FixedResponseAction
 
 __all__ = [
     "TakePhotoAction",
@@ -29,6 +30,7 @@ __all__ = [
     "NavigationAction",
     "LLMDialogAction",
     "BackToWakeUp",
+    "FixedResponseAction",
     "DefaultResponse",
     "execute_take_photo",
     "execute_record_video",

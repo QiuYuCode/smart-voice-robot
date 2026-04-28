@@ -79,6 +79,7 @@ from nodes import (
     LLMDialogAction,
     DefaultResponse,
     BackToWakeUp,
+    FixedResponseAction,
     LLMTaskPlanner,
     PlanExecutor,
 )
@@ -118,6 +119,7 @@ def create_tree(
             name="ActionSelector", memory=False
         )
         action_selector.add_children([
+            FixedResponseAction("FixedResponse", config=config),
             DescribeLeftPalmAction("DescribeLeftPalm", config=config),
             DescribeRightPalmAction("DescribeRightPalm", config=config),
             DescribeSceneAction("DescribeScene", config=config),

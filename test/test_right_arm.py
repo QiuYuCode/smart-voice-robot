@@ -12,15 +12,20 @@ def main():
     right_robot.connect()
     
     # 重置机械臂
-    # right_robot.reset()
-    # print("使能机械臂中...")
-    # right_robot.enable()
-    # while not right_robot.enable():
-    #     print("等待机械臂使能成功...")
-    #     time.sleep(0.1)
+    right_robot.reset()
+    time.sleep(3)
     
-    # 设置机械臂为正常模式
-    # right_robot.set_normal_mode()
+    print("使能机械臂中...")  
+    while not right_robot.enable():
+        print("等待机械臂使能成功...")
+        time.sleep(0.1)
+    print("机械臂使能成功...")
+    
+    while not right_robot.set_normal_mode():
+        print("等待机械臂设置为正常模式成功...")
+        time.sleep(0.01)
+    print("机械臂设置为正常模式成功...")
+    
     
     # 设置机械臂为主模式
     # time.sleep(3)
@@ -30,7 +35,7 @@ def main():
     # right_robot.set_follower_mode()
     
     # 紧急停止机械臂
-    right_robot.electronic_emergency_stop()
+    # right_robot.electronic_emergency_stop()
     
 
     # 获取从臂/普通模式下的关节角度

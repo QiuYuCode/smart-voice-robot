@@ -20,6 +20,7 @@ from nodes.actions import (
     LLMDialogAction,
     DefaultResponse,
     BackToWakeUp,
+    FixedResponseAction,
 )
 
 __all__ = [
@@ -43,4 +44,5 @@ __all__ = [
     "LLMDialogAction",
     "DefaultResponse",
     "BackToWakeUp",
+    "FixedResponseAction",
 ]

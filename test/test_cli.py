@@ -43,6 +43,7 @@ from nodes.actions import (
     RobotArmAction,
     NavigationAction,
     LLMDialogAction,
+    FixedResponseAction,
     DefaultResponse,
     BackToWakeUp,
 )
@@ -200,6 +201,7 @@ def create_test_tree(
             name="ActionSelector", memory=False
         )
         action_selector.add_children([
+            FixedResponseAction("FixedResponse", config=config),
             DescribeLeftPalmAction("DescribeLeftPalm", config=config),
             DescribeRightPalmAction("DescribeRightPalm", config=config),
             DescribeSceneAction("DescribeScene", config=config),

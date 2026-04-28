@@ -38,12 +38,21 @@ class RobotArmControl:
 
     def reset(self):
         self._arm.reset()
+        
+    def enable(self):
+        while not self._arm.enable():
+            print("等待机械臂使能成功...")
+            time.sleep(0.1)
+        print("机械臂使能成功...")
     
     def set_leader_mode(self):
         self._arm.set_leader_mode()
         
     def set_normal_mode(self):
-        self._arm.set_normal_mode()
+        while not self._arm.set_normal_mode():
+            print("等待机械臂设置为正常模式成功...")
+            time.sleep(0.01)
+        print("机械臂设置为正常模式成功...")
         
     def set_electronic_emergency_stop(self):
         self._arm.electronic_emergency_stop()
@@ -175,30 +184,62 @@ class RobotArmControl:
 
 
 def main():
-    arm = RobotArmControl(channel="can_right", json_path="test/nero_arm_records.json")
+    arm = RobotArmControl(channel="can_left", json_path="test/nero_arm_records.json")
+    
+    print("1. 连接机械臂...")
     arm.connect()
+    
+    # print("2. 使能机械臂中...")  
+    # arm.enable()
+    
+    # print("重置机械臂...")
     arm.reset()
     time.sleep(3)
+    
+    print("2. 设置机械臂为正常模式...")
     arm.set_normal_mode()
     time.sleep(3)
+    
+    print("2. 设置机械臂为使能模式")
+    arm.enable()
+    
+    print("3. 设置机械臂为主臂模式...")
     arm.set_leader_mode()
-
-    print("开始录制主臂关节角...")
+    
+    print("4. 开始录制主臂关节角...")
     record_count = arm.record_until_enter("请手动操作机械臂，完成后按回车结束录制。")
     print(f"录制结束，共保存 {record_count} 条记录。")
     
-    
     time.sleep(3)
+    
     print("开始回放录制动作...")
+    print("5. 设置机械臂为正常模式...")
     arm.set_normal_mode()
-    time.sleep(1)
+    time.sleep(3)
+    
     replay_count = arm.replay_from_json(speed_percent=50, use_timing=True)
     print(f"回放结束，共执行 {replay_count} 条动作。")
+    time.sleep(3)
     
-    time.sleep(1)
+    print("6. 紧急停止机械臂...")
     arm.set_electronic_emergency_stop()
+    time.sleep(3)
+    
+    print("7. 设置机械臂为正常模式...")
+    arm.set_normal_mode()
+    time.sleep(3)
+        
+    print("8. 重置机械臂...")
+    arm.reset()
+    time.sleep(3)
 
-
+    print("9. 使能机械臂...")
+    arm.enable()
+    
+    print("10. 恢复到普通模式...")
+    arm.set_normal_mode()
+    time.sleep(3)
+        
 if __name__ == "__main__":
     try:
         main()

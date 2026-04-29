@@ -246,6 +246,11 @@ class RobotConfig:
         "wakeup": "我在，请说。",
         "timeout": "没有听到您的命令，有需要可以再叫我。",
     })
+    interrupt_wakeup_responses: list[str] = field(default_factory=lambda: [
+        "我在，请说。",
+        "唉，我在。",
+        "怎么了。",
+    ])
 
     # --- 启动提示音 ---
     startup_sound_enabled: bool = True

@@ -47,7 +47,7 @@ tts_max_chars_per_chunk: 80
 tts_sentence_pause: 0.40
 tts_clause_pause: 0.15
 # "local" | "iflytek_cloud"
-tts_backend: iflytek_cloud
+tts_backend: local
 cloud_tts_fallback_to_local: true
 
 # --- 讯飞云 TTS 配置 ---
@@ -75,11 +75,11 @@ interrupt_min_speech_seconds: 0.6  # TTS 启动后延迟启用打断
 
 # --- 相机 ---
 # 后端: "local" (本机 USB) | "http" (远端 FastAPI) | "ros" (rclpy + cv_bridge)
-camera_backend: http
+camera_backend: local
 default_camera: head   # describe_scene/take_photo/record_video 默认相机
 
 # HTTP 后端 (远端 10.168.1.101 上跑 scripts/remote_camera_server.py)
-camera_http_base_url: http://10.168.1.101:8080
+camera_http_base_url: http://localhost:8080
 camera_http_timeout: 5.0
 
 # ROS 后端 (需要 source /opt/ros/<distro>/setup.bash 后启动 main.py)
@@ -91,7 +91,7 @@ camera_ros_warmup_seconds: 2.0
 # index: 远端 /dev/videoN ; ros_topic: rclpy 订阅话题
 cameras:
   head:
-    index: 4
+    index: 0
     width: 640
     height: 480
     ros_topic: /camera/color/image_raw
@@ -115,8 +115,8 @@ camera_record_seconds: 10.0
 # --- LLM ---
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"
 llm_provider: ollama
-llm_model: deepseek-r1:1.5b
-llm_base_url: http://10.168.1.101:11434
+llm_model: qwen2.5:0.5b
+llm_base_url: http://localhost:11434
 llm_max_history: 10
 llm_request_timeout: 30.0
 llm_system_prompt: |
@@ -131,7 +131,7 @@ llm_system_prompt: |
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"
 vlm_provider: ollama
 vlm_model: qwen3.5:0.8b
-vlm_base_url: http://10.168.1.101:11434
+vlm_base_url: http://localhost:11434
 vlm_system_prompt: |
   你是一个机器人的视觉系统。根据图片内容，用简短自然的中文描述你看到的场景。
   用第一人称：我看到了。
@@ -168,6 +168,10 @@ tts_responses:
   back_to_origin: 好的，正在回到坐标原点。
   arc_welding: 正在执行弧焊作业，请注意安全。
   workbench_status_check: 好的，正在启动工作台，检查运行状态。
+interrupt_wakeup_responses:
+  - 我在，请说。
+  - 唉，我在。
+  - 怎么了。
 
 # --- 启动提示音 ---
 startup_sound_enabled: true

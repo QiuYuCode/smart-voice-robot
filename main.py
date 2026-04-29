@@ -68,6 +68,8 @@ from nodes import (
     RecognizeIntent,
     SpeakResponse,
     WakeupResponse,
+    WakeWordInterruptMonitor,
+    ResetWakeWordInterruptState,
     DialogContinueGuard,
     TakePhotoAction,
     RecordVideoAction,
@@ -94,9 +96,9 @@ def create_tree(
     Returns:
         行为树根节点
     """
-    dialog_loop = py_trees.composites.Sequence(
-        name="DialogLoop", memory=False
-    )
+    # memory=True: 当前轮执行到 SpeakStage 时，后续 tick 持续停留在该阶段，
+    # 不会回头重新执行 Listen/Intent，从而实现“Listen 挂起，WakeWord 仅在 TTS 阶段活跃”。
+    dialog_loop = py_trees.composites.Sequence(name="DialogLoop", memory=True)
 
     listen_node = (
         ListenCloudCommand("ListenCloud", engine)
@@ -104,13 +106,28 @@ def create_tree(
         else ListenCommand("Listen", engine)
     )
 
+    speak_parallel = py_trees.composites.Parallel(
+        name="SpeakOrInterrupt",
+        policy=py_trees.common.ParallelPolicy.SuccessOnOne(),
+    )
+    speak_parallel.add_children([
+        SpeakResponse("Speak", engine),
+        WakeWordInterruptMonitor("WakeWordInterrupt", engine, config),
+    ])
+
+    speak_stage = py_trees.composites.Sequence(name="SpeakStage", memory=False)
+    speak_stage.add_children([
+        speak_parallel,
+        ResetWakeWordInterruptState("ResetWakeWordInterrupt", engine, config),
+    ])
+
     if config.use_llm_planner:
         # === LLM 规划器模式: 支持一句话多指令 ===
         dialog_loop.add_children([
             listen_node,
             LLMTaskPlanner("Planner", config=config, engine=engine),
             PlanExecutor("Executor", config=config, engine=engine),
-            SpeakResponse("Speak", engine),
+            speak_stage,
             DialogContinueGuard("ContinueGuard"),
         ])
     else:
@@ -135,7 +152,7 @@ def create_tree(
             listen_node,
             RecognizeIntent("Intent", config=config),
             action_selector,
-            SpeakResponse("Speak", engine),
+            speak_stage,
             DialogContinueGuard("ContinueGuard"),
         ])
 

@@ -30,11 +30,11 @@ class WaitForWakeWord(Behaviour):
         if self.kws_stream is not None:
             self.engine.kws.reset_stream(self.kws_stream)
         # 清空队列，避免处理旧数据
-        self.engine.clear_dialog_queue()
+        self.engine.clear_kws_queue()
 
     def update(self):
-        while not self.engine.dialog_audio_queue.empty():
-            data = self.engine.dialog_audio_queue.get()
+        while not self.engine.kws_audio_queue.empty():
+            data = self.engine.kws_audio_queue.get()
             samples = np.frombuffer(data, dtype=np.float32)
 
             self.kws_stream.accept_waveform(SAMPLE_RATE, samples)
@@ -46,6 +46,8 @@ class WaitForWakeWord(Behaviour):
                     self.engine.kws.reset_stream(self.kws_stream)
                     return Status.SUCCESS
 
+        # 待机阶段不需要保留 ASR 队列中的历史音频，避免积压。
+        self.engine.clear_dialog_queue()
         return Status.RUNNING
 
     def terminate(self, new_status):

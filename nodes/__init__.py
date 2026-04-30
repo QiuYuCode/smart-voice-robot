@@ -6,6 +6,10 @@ from nodes.listen import ListenCommand
 from nodes.listen_cloud import ListenCloudCommand
 from nodes.intent import RecognizeIntent
 from nodes.speak import SpeakResponse, WakeupResponse
+from nodes.interrupt import (
+    WakeWordInterruptMonitor,
+    ResetWakeWordInterruptState,
+)
 from nodes.guards import DialogContinueGuard
 from nodes.planner import LLMTaskPlanner
 from nodes.plan_executor import PlanExecutor
@@ -31,6 +35,8 @@ __all__ = [
     "RecognizeIntent",
     "SpeakResponse",
     "WakeupResponse",
+    "WakeWordInterruptMonitor",
+    "ResetWakeWordInterruptState",
     "DialogContinueGuard",
     "LLMTaskPlanner",
     "PlanExecutor",

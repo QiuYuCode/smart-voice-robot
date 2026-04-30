@@ -4,6 +4,7 @@
 管理 KWS / ASR / TTS 模型初始化和音频流。
 提供独立的音频队列：
   - dialog_audio_queue: 供 ListenCommand (ASR) 消费
+  - kws_audio_queue: 供唤醒词检测/播报打断消费
 """
 
 import base64
@@ -11,6 +12,7 @@ import hashlib
 import hmac
 import json
 import queue
+import time
 from email.utils import formatdate
 from urllib.parse import urlencode
 
@@ -38,9 +40,12 @@ class VoiceEngine:
 
         # 音频队列
         self.dialog_audio_queue: queue.Queue = queue.Queue()
+        self.kws_audio_queue: queue.Queue = queue.Queue()
 
         self.is_running = True
         self.mic_stream = None
+        self._is_async_speaking = False
+        self._speak_deadline = 0.0
 
         # 1. 唤醒检测（按模式选择）
         self.kws = None
@@ -196,11 +201,12 @@ class VoiceEngine:
     # ------------------------------------------------------------------
 
     def audio_callback(self, indata, frames, time_info, status):
-        """麦克风数据回调 - 写入对话队列"""
+        """麦克风数据回调 - 分发给 ASR/KWS 队列"""
         if status:
             logger.warning(f"[Audio] 回调状态异常: {status}")
         raw_bytes = bytes(indata)
         self.dialog_audio_queue.put(raw_bytes)
+        self.kws_audio_queue.put(raw_bytes)
 
     def start(self):
         """启动麦克风音频流和硬件驱动（如有）"""
@@ -223,6 +229,7 @@ class VoiceEngine:
     def stop(self):
         """停止音频流和硬件驱动"""
         self.is_running = False
+        self.stop_speaking()
         if self.mic_stream:
             self.mic_stream.stop()
             self.mic_stream.close()
@@ -461,10 +468,49 @@ class VoiceEngine:
 
     def speak_blocking(self, text: str):
         """阻塞式 TTS 播放 (用于简短提示音)"""
+        if self.start_speaking(text):
+            self.wait_until_speaking_done()
+
+    def start_speaking(self, text: str) -> bool:
+        """启动非阻塞 TTS 播放。返回是否成功启动音频。"""
         logger.info(f"[TTS] {text}")
+        self.stop_speaking()
         samples, sr = self.generate_speech(text)
-        sd.play(samples, samplerate=sr)
-        sd.wait()
+        if len(samples) == 0:
+            self._is_async_speaking = False
+            self._speak_deadline = 0.0
+            return False
+
+        sd.play(samples, samplerate=sr, blocking=False)
+        self._is_async_speaking = True
+        self._speak_deadline = time.time() + (len(samples) / float(sr))
+        return True
+
+    def is_speaking_active(self) -> bool:
+        """当前是否仍有异步 TTS 正在播放。"""
+        if self._is_async_speaking and time.time() >= self._speak_deadline:
+            self._is_async_speaking = False
+        return self._is_async_speaking
+
+    def wait_until_speaking_done(self, poll_interval: float = 0.02):
+        """等待异步 TTS 播放结束，并清理音频流状态。"""
+        while self.is_speaking_active():
+            time.sleep(poll_interval)
+        self.stop_speaking()
+
+    def stop_speaking(self):
+        """立即停止当前 TTS 播放。"""
+        try:
+            sd.stop()
+        except Exception:
+            pass
+        try:
+            stream = sd.get_stream()
+            stream.close()
+        except Exception:
+            pass
+        self._is_async_speaking = False
+        self._speak_deadline = 0.0
 
     # ------------------------------------------------------------------
     # 队列管理
@@ -475,6 +521,11 @@ class VoiceEngine:
         with self.dialog_audio_queue.mutex:
             self.dialog_audio_queue.queue.clear()
 
+    def clear_kws_queue(self):
+        """清空唤醒词音频队列"""
+        with self.kws_audio_queue.mutex:
+            self.kws_audio_queue.queue.clear()
+
     def clear_monitor_queue(self):
         """兼容旧接口：当前未使用监控队列"""
         return
@@ -482,3 +533,4 @@ class VoiceEngine:
     def clear_all_queues(self):
         """清空所有音频队列"""
         self.clear_dialog_queue()
+        self.clear_kws_queue()

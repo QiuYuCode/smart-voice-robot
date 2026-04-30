@@ -1,5 +1,6 @@
-"""打断监控节点"""
+"""播报期间的唤醒词打断节点"""
 
+import random
 import time
 
 import numpy as np
@@ -10,16 +11,82 @@ from py_trees.common import Status
 from config import SAMPLE_RATE, RobotConfig
 
 
-class InterruptMonitor(Behaviour):
-    """
-    打断监控器，与 DialogLoop 在 Parallel(SuccessOnOne) 中并行运行。
+def _is_wakeword_interrupted(blackboard) -> bool:
+    """黑板字段未初始化时按 False 处理。"""
+    try:
+        return bool(blackboard.wakeword_interrupted)
+    except KeyError:
+        return False
 
-    检测两种打断条件:
-      1. VAD: TTS 播放期间 is_speech_detected() 检测到用户说话
-      2. Timeout: 超过 dialog_timeout 无活动
 
-    任一条件满足返回 SUCCESS，触发 Parallel 终止整个 ActiveState。
-    """
+class WakeWordInterruptMonitor(Behaviour):
+    """TTS 播报期间持续监听唤醒词，命中后触发停播。"""
+
+    def __init__(self, name: str, engine, config: RobotConfig):
+        super().__init__(name)
+        self.engine = engine
+        self.config = config
+        self.kws_stream = None
+
+        self.blackboard = self.attach_blackboard_client(
+            name="WakeWordInterruptMonitor", namespace="dialog"
+        )
+        self.blackboard.register_key(
+            key="is_speaking", access=py_trees.common.Access.READ
+        )
+        self.blackboard.register_key(
+            key="speak_start_time", access=py_trees.common.Access.READ
+        )
+        self.blackboard.register_key(
+            key="wakeword_interrupted", access=py_trees.common.Access.WRITE
+        )
+
+    def setup(self, **kwargs):
+        if self.engine.kws is not None:
+            self.kws_stream = self.engine.kws.create_stream()
+
+    def initialise(self):
+        self.blackboard.wakeword_interrupted = False
+        if self.kws_stream is not None and self.engine.kws is not None:
+            self.engine.kws.reset_stream(self.kws_stream)
+        self.engine.clear_kws_queue()
+
+    def update(self):
+        if self.engine.kws is None or self.kws_stream is None:
+            return Status.RUNNING
+
+        if not getattr(self.blackboard, "is_speaking", False):
+            self.engine.clear_kws_queue()
+            return Status.RUNNING
+
+        speak_start_time = getattr(self.blackboard, "speak_start_time", 0.0)
+        if time.time() - speak_start_time < self.config.interrupt_min_speech_seconds:
+            self.engine.clear_kws_queue()
+            return Status.RUNNING
+
+        while not self.engine.kws_audio_queue.empty():
+            data = self.engine.kws_audio_queue.get()
+            samples = np.frombuffer(data, dtype=np.float32)
+            self.kws_stream.accept_waveform(SAMPLE_RATE, samples)
+
+            while self.engine.kws.is_ready(self.kws_stream):
+                self.engine.kws.decode_stream(self.kws_stream)
+                keyword = self.engine.kws.get_result(self.kws_stream)
+                if keyword:
+                    self.logger.info(f"TTS 播报中检测到唤醒词: {keyword.strip()}")
+                    self.blackboard.wakeword_interrupted = True
+                    self.engine.kws.reset_stream(self.kws_stream)
+                    return Status.SUCCESS
+
+        return Status.RUNNING
+
+    def terminate(self, new_status):
+        if self.kws_stream is not None and self.engine.kws is not None:
+            self.engine.kws.reset_stream(self.kws_stream)
+
+
+class ResetWakeWordInterruptState(Behaviour):
+    """在播报被唤醒词打断后清理本轮对话状态，下一轮直接进入 Listen。"""
 
     def __init__(self, name: str, engine, config: RobotConfig):
         super().__init__(name)
@@ -27,70 +94,45 @@ class InterruptMonitor(Behaviour):
         self.config = config
 
         self.blackboard = self.attach_blackboard_client(
-            name="InterruptMonitor", namespace="dialog"
+            name="ResetWakeWordInterruptState", namespace="dialog"
         )
         self.blackboard.register_key(
-            key="is_speaking", access=py_trees.common.Access.WRITE
+            key="wakeword_interrupted", access=py_trees.common.Access.WRITE
         )
         self.blackboard.register_key(
-            key="speak_start_time", access=py_trees.common.Access.WRITE
+            key="intent", access=py_trees.common.Access.WRITE
+        )
+        self.blackboard.register_key(
+            key="response_text", access=py_trees.common.Access.WRITE
+        )
+        self.blackboard.register_key(
+            key="user_command", access=py_trees.common.Access.WRITE
+        )
+        self.blackboard.register_key(
+            key="action_plan", access=py_trees.common.Access.WRITE
         )
         self.blackboard.register_key(
             key="last_activity_time", access=py_trees.common.Access.WRITE
         )
-        self.blackboard.register_key(
-            key="interrupted", access=py_trees.common.Access.WRITE
-        )
-
-    def initialise(self):
-        self.blackboard.interrupted = False
-        # 初始化 is_speaking，避免首次进入时 KeyError
-        self.blackboard.is_speaking = False
-        self.blackboard.speak_start_time = 0.0
-        # 确保 last_activity_time 存在，避免首次进入时 KeyError
-        self.blackboard.last_activity_time = time.time()
-        # 重置 VAD 状态
-        self.engine.vad.reset()
-        self.engine.clear_monitor_queue()
 
     def update(self):
-        # --- 条件 1: 超时检测 ---
-        last_activity = self.blackboard.last_activity_time
-        if time.time() - last_activity > self.config.dialog_timeout:
-            self.logger.info(
-                f"对话超时 ({self.config.dialog_timeout}s)，回到待机"
-            )
-            self.blackboard.interrupted = True
+        if not _is_wakeword_interrupted(self.blackboard):
             return Status.SUCCESS
 
-        # --- 条件 2: VAD 检测 (仅在 TTS 播放期间) ---
-        is_speaking = getattr(self.blackboard, "is_speaking", False)
-
-        if is_speaking:
-            speak_start_time = getattr(self.blackboard, "speak_start_time", 0.0)
-            if time.time() - speak_start_time < self.config.interrupt_min_speech_seconds:
-                # TTS 刚开始播放，忽略短暂的回声触发
-                return Status.RUNNING
-            # 将监控队列中的音频喂给 VAD
-            while not self.engine.monitor_audio_queue.empty():
-                data = self.engine.monitor_audio_queue.get()
-                samples = np.frombuffer(data, dtype=np.float32)
-                self.engine.vad.accept_waveform(samples)
-
-            # is_speech_detected() 检测当前是否有语音活动 (实时，无需等完整段落)
-            if self.engine.vad.is_speech_detected():
-                self.logger.info("检测到用户说话，打断 TTS 播放")
-                self.blackboard.interrupted = True
-                # 清空已检测到的片段
-                while not self.engine.vad.empty():
-                    self.engine.vad.pop()
-                self.engine.vad.reset()
-                return Status.SUCCESS
-        else:
-            # 非播放期间，丢弃监控队列数据防止积压
-            self.engine.clear_monitor_queue()
-
-        return Status.RUNNING
-
-    def terminate(self, new_status):
-        self.engine.vad.reset()
+        self.logger.info("唤醒词打断成功，停止当前回复并回到聆听")
+        responses = [
+            text.strip()
+            for text in self.config.interrupt_wakeup_responses
+            if text and text.strip()
+        ]
+        if responses:
+            self.engine.speak_blocking(random.choice(responses))
+        self.blackboard.wakeword_interrupted = False
+        self.blackboard.intent = ""
+        self.blackboard.response_text = ""
+        self.blackboard.user_command = ""
+        self.blackboard.action_plan = []
+        self.blackboard.last_activity_time = time.time()
+        self.engine.clear_dialog_queue()
+        self.engine.clear_kws_queue()
+        return Status.SUCCESS

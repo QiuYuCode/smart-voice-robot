@@ -19,6 +19,7 @@ from nodes.actions.vision import (
 from nodes.actions.back_to_wakeup import BackToWakeUp
 from nodes.actions.default_response import DefaultResponse
 from nodes.actions.fixed_response import FixedResponseAction
+from nodes.actions.gripper import GripperAction, execute_gripper_action
 
 __all__ = [
     "TakePhotoAction",
@@ -32,10 +33,12 @@ __all__ = [
     "BackToWakeUp",
     "FixedResponseAction",
     "DefaultResponse",
+    "GripperAction",
     "execute_take_photo",
     "execute_record_video",
     "execute_describe_scene",
     "capture_frame_as_base64",
     "execute_robot_arm",
     "execute_navigate",
+    "execute_gripper_action",
 ]

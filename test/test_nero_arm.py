@@ -3,7 +3,7 @@ import threading
 import time
 from pathlib import Path
 
-from pyAgxArm import AgxArmFactory, create_agx_arm_config
+from pyAgxArm import AgxArmFactory, create_agx_arm_config, NeroFW
 
 
 class RobotArmControl:
@@ -23,7 +23,7 @@ class RobotArmControl:
         self._json_path = Path(json_path)
         self._sample_interval_s = sample_interval_s
 
-        arm_cfg = create_agx_arm_config(robot=robot, comm=comm, channel=channel)
+        arm_cfg = create_agx_arm_config(robot=robot, comm=comm, channel=channel, firmeware_version=NeroFW.V111)
         self._arm = AgxArmFactory.create_arm(arm_cfg)
 
         self._record_thread = None
@@ -35,21 +35,48 @@ class RobotArmControl:
 
     def connect(self):
         self._arm.connect()
+        if not self._arm.is_connected():
+            raise RuntimeError("机械臂连接失败...")
 
+    def disconnect(self):
+        self._arm.disconnect()
+        if self._arm.is_connected():
+            raise RuntimeError("机械臂断开连接失败...")
+    
+    def get_arm_status(self):
+        arm_status = self._arm.get_arm_status()
+        if arm_status is not None:
+            print(arm_status.msg)
+            print(arm_status.hz, arm_status.timestamp)
+        else:
+            print("机械臂状态获取失败...")
+    
+    def get_firmware(self):
+        firmware = self._arm.get_firmware()
+        if firmware is not None:
+            print(firmware)
+        else:
+            print("机械臂固件获取失败...")
+    
     def reset(self):
         self._arm.reset()
         
     def enable(self):
         while not self._arm.enable():
             print("等待机械臂使能成功...")
-            time.sleep(0.1)
-        print("机械臂使能成功...")
+            time.sleep(0.01)
+        
+        if self._arm.get_joint_enable_status(255):
+            print("机械臂使能成功...")
+        else:
+            print("机械臂使能失败...")
     
     def set_leader_mode(self):
         self._arm.set_leader_mode()
         
     def set_normal_mode(self):
-        while not self._arm.set_normal_mode():
+        while not self._arm.enable():
+            self._arm.set_normal_mode()
             print("等待机械臂设置为正常模式成功...")
             time.sleep(0.01)
         print("机械臂设置为正常模式成功...")
@@ -95,7 +122,14 @@ class RobotArmControl:
         input()
         return self.stop_recording(save=True)
 
-    def replay_from_json(self, speed_percent=None, use_timing=True):
+    def replay_from_json(
+        self,
+        speed_percent=None,
+        use_timing=True,
+        wait_motion_done=True,
+        motion_timeout_s=5.0,
+        motion_poll_interval_s=0.1,
+    ):
         records = self._load_records_from_json()
         if not records:
             raise RuntimeError("录制文件中没有可回放的动作数据。")
@@ -104,6 +138,7 @@ class RobotArmControl:
             self._arm.set_speed_percent(speed_percent)
 
         last_timestamp = None
+        executed_count = 0
         for item in records:
             current_timestamp = item["timestamp"]
             if use_timing and last_timestamp is not None:
@@ -112,9 +147,31 @@ class RobotArmControl:
                     time.sleep(delay)
 
             self.move_j(item["joints"])
+            executed_count += 1
+            if wait_motion_done:
+                reached = self._wait_until_motion_done(
+                    timeout_s=motion_timeout_s,
+                    poll_interval_s=motion_poll_interval_s,
+                )
+                if not reached:
+                    print("回放中止：机械臂未在超时时间内到达目标位置。")
+                    break
             last_timestamp = current_timestamp
 
-        return len(records)
+        return executed_count
+
+    def _wait_until_motion_done(self, timeout_s=5.0, poll_interval_s=0.1):
+        time.sleep(0.5)
+        start_t = time.monotonic()
+        while True:
+            status = self._arm.get_arm_status()
+            if status is not None and status.msg.motion_status == 0:
+                print("已到达目标位置")
+                return True
+            if time.monotonic() - start_t > timeout_s:
+                print(f"等待运动结束超时（{timeout_s:.1f}s）")
+                return False
+            time.sleep(poll_interval_s)
 
     def _record_loop(self):
         while not self._stop_event.is_set():
@@ -189,56 +246,63 @@ def main():
     print("1. 连接机械臂...")
     arm.connect()
     
-    # print("2. 使能机械臂中...")  
-    # arm.enable()
-    
-    # print("重置机械臂...")
-    arm.reset()
-    time.sleep(3)
-    
-    print("2. 设置机械臂为正常模式...")
-    arm.set_normal_mode()
-    time.sleep(3)
-    
-    print("2. 设置机械臂为使能模式")
+    print("2. 使能机械臂...")  
     arm.enable()
+    time.sleep(3)
     
-    print("3. 设置机械臂为主臂模式...")
+    print("3. 获取机械臂固件...")
+    # arm.get_firmware()
+    
+    print("4. 获取机械臂状态...")
+    arm.get_arm_status()
+    
+    time.sleep(3)
+    print("5. 获取机械臂固件...")
+    arm.get_firmware()
+    
+    print("6. 设置机械臂为示教模式...")
     arm.set_leader_mode()
+    time.sleep(3)
     
-    print("4. 开始录制主臂关节角...")
+    # arm.get_arm_status()
+    # arm.disconnect()
+    
+    print("7. 开始录制关节角度...")
     record_count = arm.record_until_enter("请手动操作机械臂，完成后按回车结束录制。")
     print(f"录制结束，共保存 {record_count} 条记录。")
-    
     time.sleep(3)
     
     print("开始回放录制动作...")
-    print("5. 设置机械臂为正常模式...")
+
+    print("8. 设置机械臂为正常模式...")
     arm.set_normal_mode()
     time.sleep(3)
+    arm.get_arm_status()
+    
     
     replay_count = arm.replay_from_json(speed_percent=50, use_timing=True)
     print(f"回放结束，共执行 {replay_count} 条动作。")
     time.sleep(3)
     
-    print("6. 紧急停止机械臂...")
+    print("9. 紧急停止机械臂...")
     arm.set_electronic_emergency_stop()
-    time.sleep(3)
-    
-    print("7. 设置机械臂为正常模式...")
-    arm.set_normal_mode()
+    arm.get_arm_status()
     time.sleep(3)
         
-    print("8. 重置机械臂...")
+    print("10. 重置机械臂...")
     arm.reset()
     time.sleep(3)
 
-    print("9. 使能机械臂...")
+    print("11. 使能机械臂...")
     arm.enable()
     
-    print("10. 恢复到普通模式...")
+    print("12. 恢复到普通模式...")
     arm.set_normal_mode()
+    arm.get_arm_status()
     time.sleep(3)
+    
+    print("13. 断开机械臂连接...")
+    arm.disconnect()
         
 if __name__ == "__main__":
     try:

@@ -51,6 +51,16 @@ def _build_planner_tools():
         return "control_robot_arm called"
 
     @tool
+    def control_gripper(hand: str, action: str) -> str:
+        """控制左手或右手夹爪。
+
+        Args:
+            hand: 左右手，必须为 left 或 right。
+            action: 夹爪动作，支持 shake、open、handshake。
+        """
+        return "control_gripper called"
+
+    @tool
     def describe_scene(question: str = "请描述你看到的场景") -> str:
         """用相机拍照并分析画面内容。当用户要求看看、描述场景、识别物体时调用。
 
@@ -64,7 +74,15 @@ def _build_planner_tools():
         """结束当前对话，回到待机状态。当用户说退出、结束、没事了时调用。"""
         return "exit_conversation called"
 
-    return [take_photo, record_video, navigate, control_robot_arm, describe_scene, exit_conversation]
+    return [
+        take_photo,
+        record_video,
+        navigate,
+        control_robot_arm,
+        control_gripper,
+        describe_scene,
+        exit_conversation,
+    ]
 
 
 # ============================================================================

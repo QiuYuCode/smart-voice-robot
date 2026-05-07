@@ -11,8 +11,8 @@ def main():
     left_robot.connect()
     
     # 重置机械臂
-    # left_robot.reset()
-    # time.sleep(3)
+    left_robot.reset()
+    time.sleep(3)
     
     while not left_robot.enable():
         print("等待机械臂使能成功...")
@@ -20,7 +20,7 @@ def main():
     print("机械臂使能成功...")
     
     # 设置机械臂为正常模式
-    while not left_robot.set_normal_mode():
+    while left_robot.set_normal_mode():
         print("等待机械臂设置为正常模式成功...")
         time.sleep(0.01)
     print("机械臂设置为正常模式成功...")

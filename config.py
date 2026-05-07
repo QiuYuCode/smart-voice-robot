@@ -190,6 +190,39 @@ class RobotConfig:
     camera_save_dir: str = "captures"           # 照片/视频保存目录 (相对于项目根目录)
     camera_record_seconds: float = 10.0         # 视频录制时长 (秒)
 
+    # --- 夹爪 (DexHand021S) ---
+    gripper_enabled: bool = True
+    # 适配器类型: "zlg_mini" | "zlg_200u" | "lys_mini"
+    gripper_adapter_type: str = "zlg_mini"
+    gripper_finger_ids: list[int] = field(default_factory=lambda: [0x01, 0x02, 0x03])
+    gripper_control_mode: int = 0x55
+    # 合拢/张开可用不同速度；数值越小动作越慢（与 SDK move_finger 的 motion_velocity 一致）
+    gripper_default_speed: int = 500
+    gripper_speed_close: int = 280
+    gripper_speed_open: int = 240
+    gripper_open_value: int = 0
+    gripper_close_value: int = 1000
+    gripper_shake_cycles: int = 1
+    gripper_shake_pause_close: float = 0.55
+    gripper_shake_pause_open: float = 0.55
+    gripper_second_hand_init_delay: float = 0.5
+    gripper_inter_finger_delay: float = 0.04
+    gripper_post_reset_sleep: float = 0.45
+    gripper_exec_delay_ms: int = 10
+    gripper_set_safe_current: bool = True
+    gripper_safe_current: int = 250
+
+    left_gripper: dict[str, Any] = field(default_factory=lambda: {
+        "adapter_index": 0,
+        "device_id": 0x01,
+        "has_pressure_sensor": False,
+    })
+    right_gripper: dict[str, Any] = field(default_factory=lambda: {
+        "adapter_index": 1,
+        "device_id": 0x02,
+        "has_pressure_sensor": True,
+    })
+
     # --- LLM ---
     # provider: "ollama" | "openai" | "deepseek" | "anthropic"
     llm_provider: str = "ollama"
@@ -227,7 +260,8 @@ class RobotConfig:
         "规则：\n"
         "1. 如果用户给出多个指令，请按顺序调用多个工具。\n"
         "2. 如果用户只是闲聊或提问，直接用简短中文回复，不要调用任何工具。\n"
-        "3. 不要输出 emoji 表情和其他任何表情符号。\n"
+        "3. 夹爪控制必须显式指定 hand=left 或 hand=right，不允许省略。\n"
+        "4. 不要输出 emoji 表情和其他任何表情符号。\n"
     )
 
     # --- 意图关键词映射 ---
@@ -236,6 +270,9 @@ class RobotConfig:
         "describe_scene": ["看一下", "看看", "这是什么", "前面有什么", "描述一下", "看到了什么"],
         "take_photo": ["拍照", "拍张照", "拍个照", "拍一张", "照片"],
         "record_video": ["录像", "录制视频", "录视频", "录一段", "摄像", "拍个视频", "拍视频"],
+        "gripper_control": [
+            "左手张开", "右手张开", "左手握手", "右手握手", "动动左手", "动动右手", "左手", "右手", "夹爪"
+        ],
         "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
         "navigation": ["导航", "前往", "去", "带我去"],
         "exit": ["退出", "结束", "停止", "没事了", "拜拜", "退下吧"],
@@ -245,6 +282,7 @@ class RobotConfig:
     tts_responses: dict[str, str] = field(default_factory=lambda: {
         "wakeup": "我在，请说。",
         "timeout": "没有听到您的命令，有需要可以再叫我。",
+        "gripper_missing_side": "请说明左手还是右手。",
     })
     interrupt_wakeup_responses: list[str] = field(default_factory=lambda: [
         "我在，请说。",

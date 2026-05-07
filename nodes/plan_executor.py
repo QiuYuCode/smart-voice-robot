@@ -8,6 +8,7 @@ from py_trees.common import Status
 
 from config import RobotConfig
 from nodes.actions.camera import execute_take_photo, execute_record_video
+from nodes.actions.gripper import execute_gripper_action
 from nodes.actions.navigation import execute_navigate
 from nodes.actions.robot_arm import execute_robot_arm
 from nodes.actions.vision import execute_describe_scene
@@ -61,6 +62,11 @@ class PlanExecutor(Behaviour):
         if name == "control_robot_arm":
             action = args.get("action", "未知动作")
             return execute_robot_arm(action)
+
+        if name == "control_gripper":
+            hand = args.get("hand", "")
+            action = args.get("action", "")
+            return execute_gripper_action(self._config, {"hand": hand, "action": action})
 
         if name == "describe_scene":
             question = args.get("question", "请描述你看到的场景")

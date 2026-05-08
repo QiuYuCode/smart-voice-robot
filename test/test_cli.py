@@ -27,8 +27,6 @@ import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 
-from pathlib import Path
-
 from config import default_config, RobotConfig
 from nodes.intent import RecognizeIntent
 from nodes.guards import DialogContinueGuard
@@ -48,6 +46,7 @@ from nodes.actions import (
     DefaultResponse,
     BackToWakeUp,
 )
+from nodes.actions.robot_arm import resolve_keyword_robot_arm_action
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +208,7 @@ def create_test_tree(
             TakePhotoAction("TakePhoto", config=config),
             RecordVideoAction("RecordVideo", config=config),
             GripperAction("Gripper", config=config),
-            RobotArmAction("RobotArm"),
+            RobotArmAction("RobotArm", config=config),
             NavigationAction("Navigation"),
             LLMDialogAction("LLMDialog", config=config),
             BackToWakeUp("BackToWakeUp"),
@@ -230,13 +229,33 @@ def create_test_tree(
 # 运行模式
 # ---------------------------------------------------------------------------
 
-def _interactive_source():
+def _build_interactive_source():
     """交互模式：从 stdin 读取一行文本。"""
     try:
-        text = input("[你] ").strip()
-    except EOFError:
-        return None
-    return text or None
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.patch_stdout import patch_stdout
+    except ImportError:
+        def fallback_source():
+            try:
+                text = input("[你] ").strip()
+            except EOFError:
+                return None
+            return text or None
+
+        return fallback_source
+
+    session = PromptSession()
+
+    def prompt_toolkit_source():
+        try:
+            # 防止后台日志输出打乱当前输入行（删字残留、光标错位）。
+            with patch_stdout():
+                text = session.prompt("[你] ").strip()
+        except EOFError:
+            return None
+        return text or None
+
+    return prompt_toolkit_source
 
 
 def _oneshot_source(command: str):
@@ -265,9 +284,60 @@ def _init_tts(config: RobotConfig, enable: bool) -> SimpleTTS | None:
         return None
 
 
+def _preview_intent(config: RobotConfig, command: str) -> str:
+    """用与 RecognizeIntent 相同的顺序规则预览命中意图。"""
+    for intent_name, keywords in config.intent_patterns.items():
+        for keyword in keywords:
+            if keyword in command:
+                return intent_name
+    return "chat"
+
+
+def run_keyword_action_regression(config: RobotConfig):
+    """文本链路验证：意图入口 + 关键词动作映射。"""
+    samples = [
+        ("挥手", "robot_arm", "right", "wave", None),
+        ("你好", "robot_arm", "right", "wave", "你好，很高兴见到你。"),
+        ("欢迎一下", "robot_arm", "right", "wave", "欢迎来到这里。"),
+    ]
+    failures: list[str] = []
+    print("\n=== 关键词动作组映射回归 ===")
+    for command, expect_intent, expect_side, expect_group, expect_text in samples:
+        intent = _preview_intent(config, command)
+        mapped = resolve_keyword_robot_arm_action(config, command)
+        if intent != expect_intent:
+            failures.append(f"{command}: 意图={intent}, 期望={expect_intent}")
+            continue
+        if mapped is None:
+            failures.append(f"{command}: 未命中动作映射")
+            continue
+        if mapped.arm_side != expect_side or mapped.group_name != expect_group:
+            failures.append(
+                f"{command}: 命中 side/group={mapped.arm_side}/{mapped.group_name},"
+                f" 期望={expect_side}/{expect_group}"
+            )
+            continue
+        if expect_text is not None and mapped.response_text != expect_text:
+            failures.append(
+                f"{command}: response_text={mapped.response_text}, 期望={expect_text}"
+            )
+            continue
+        print(
+            f"[PASS] {command} -> intent={intent}, "
+            f"side={mapped.arm_side}, group={mapped.group_name}, reply={mapped.response_text or '-'}"
+        )
+
+    if failures:
+        print("[FAIL] 回归失败:")
+        for item in failures:
+            print(f"  - {item}")
+        raise SystemExit(1)
+    print("[PASS] 全部样例通过")
+
+
 def run_interactive(config: RobotConfig, tts: SimpleTTS | None = None):
     """交互模式：循环接收文本输入，直到用户退出。"""
-    root = create_test_tree(config, _interactive_source, tts=tts)
+    root = create_test_tree(config, _build_interactive_source(), tts=tts)
     loop = py_trees.decorators.SuccessIsRunning(
         name="TestLoop", child=root
     )
@@ -341,6 +411,10 @@ def parse_args():
         "--speak", default=None,
         help="直接进行 TTS 文本播报并退出 (跳过行为树)",
     )
+    parser.add_argument(
+        "--verify-keyword-actions", action="store_true",
+        help="执行关键词动作组映射文本回归（挥手/你好/自定义关键词）",
+    )
     return parser.parse_args()
 
 
@@ -367,6 +441,19 @@ def main():
         config.llm_base_url = args.base_url
     if args.api_key:
         config.llm_api_key = args.api_key
+    if args.verify_keyword_actions:
+        # 补充“自定义关键词”样例，验证扩展性（无需改代码）。
+        config.robot_arm_keyword_actions = list(config.robot_arm_keyword_actions) + [{
+            "keywords": ["欢迎一下"],
+            "arm_side": "right",
+            "group_name": "wave",
+            "response_text": "欢迎来到这里。",
+            "priority": 130,
+        }]
+        if "robot_arm" in config.intent_patterns:
+            config.intent_patterns["robot_arm"] = list(config.intent_patterns["robot_arm"]) + ["欢迎一下"]
+        run_keyword_action_regression(config)
+        return
 
     py_trees.logging.level = py_trees.logging.Level.INFO
 

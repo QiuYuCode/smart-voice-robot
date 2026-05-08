@@ -273,10 +273,66 @@ class RobotConfig:
         "gripper_control": [
             "左手张开", "右手张开", "左手握手", "右手握手", "动动左手", "动动右手", "左手", "右手", "夹爪"
         ],
-        "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
+        "robot_arm": [
+            "机械臂", "抓取", "拿起", "放下",
+            "进入示教", "开始示教", "开启示教",
+            "退出示教", "结束示教", "停止示教",
+            "示教动作", "动作组", "回放轨迹",
+            "挥手", "打招呼", "你好",
+        ],
         "navigation": ["导航", "前往", "去", "带我去"],
-        "exit": ["退出", "结束", "停止", "没事了", "拜拜", "退下吧"],
+        "exit": ["没事了", "拜拜", "再见"],
     })
+
+    # --- 机械臂关键词动作组映射 ---
+    # 命中后统一转为 run_group 执行；priority 越大优先级越高
+    robot_arm_keyword_actions: list[dict[str, Any]] = field(default_factory=lambda: [
+        {
+            "keywords": ["挥手", "打招呼"],
+            "arm_side": "right",
+            "group_name": "wave",
+            "response_text": "",
+            "priority": 100,
+        },
+        {
+            "keywords": ["你好"],
+            "arm_side": "right",
+            "group_name": "wave",
+            "response_text": "你好，很高兴见到你。",
+            "priority": 120,
+        },
+    ])
+
+    # --- 机械臂示教 ---
+    robot_arm_enabled: bool = True
+    robot_arm_robot: str = "nero"
+    robot_arm_comm: str = "can"
+    robot_arm_firmware: str = "v111"
+    robot_arm_channels: dict[str, str] = field(default_factory=lambda: {
+        "left": "can_left",
+        "right": "can_right",
+    })
+    robot_arm_teach_save_dir: str = "captures/arm_teach"
+    robot_arm_teach_file_template: str = "{arm}_teach_records.json"
+    robot_arm_sample_interval_s: float = 0.005
+    robot_arm_replay_speed_percent: int = 50
+    robot_arm_replay_use_timing: bool = True
+    robot_arm_replay_min_interval_s: float = 0.02
+    robot_arm_replay_send_retries: int = 5
+    robot_arm_replay_retry_backoff_s: float = 0.01
+    robot_arm_replay_max_seconds: float = 45.0
+    robot_arm_replay_max_frames: int = 3000
+    robot_arm_replay_min_delta_rad: float = 0.002
+    robot_arm_joint_limits: list[list[float]] = field(default_factory=lambda: [
+        [-3.2, 3.2],
+        [-2.8, 2.8],
+        [-2.8, 2.8],
+        [-1.012291, 2.146755],
+        [-3.2, 3.2],
+        [-3.2, 3.2],
+        [-3.2, 3.2],
+    ])
+    robot_arm_enable_timeout: float = 10.0
 
     # --- TTS 响应模板 ---
     tts_responses: dict[str, str] = field(default_factory=lambda: {
@@ -335,6 +391,54 @@ _PATH_FIELDS: frozenset[str] = frozenset({
 })
 
 
+def _normalize_robot_arm_keyword_actions(value: Any) -> list[dict[str, Any]]:
+    """归一化机械臂关键词映射配置。"""
+    if not isinstance(value, list):
+        logger.warning("[config] robot_arm_keyword_actions 应为 list，已忽略。")
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for idx, item in enumerate(value):
+        if not isinstance(item, dict):
+            logger.warning(f"[config] robot_arm_keyword_actions[{idx}] 应为 dict，已忽略。")
+            continue
+        keywords_raw = item.get("keywords", [])
+        if isinstance(keywords_raw, str):
+            keywords_raw = [keywords_raw]
+        if not isinstance(keywords_raw, list):
+            logger.warning(
+                f"[config] robot_arm_keyword_actions[{idx}].keywords 应为 list[str]，已忽略。"
+            )
+            continue
+        keywords = [str(k).strip() for k in keywords_raw if str(k).strip()]
+        arm_side = str(item.get("arm_side", "")).strip().lower()
+        group_name = str(item.get("group_name", "")).strip()
+        response_text = str(item.get("response_text", "")).strip()
+        priority = item.get("priority", 0)
+        try:
+            priority = int(priority)
+        except Exception:
+            logger.warning(
+                f"[config] robot_arm_keyword_actions[{idx}].priority 非法，已降级为 0。"
+            )
+            priority = 0
+
+        if not keywords or arm_side not in {"left", "right"} or not group_name:
+            logger.warning(
+                f"[config] robot_arm_keyword_actions[{idx}] 缺少必要字段，已忽略。"
+            )
+            continue
+
+        normalized.append({
+            "keywords": keywords,
+            "arm_side": arm_side,
+            "group_name": group_name,
+            "response_text": response_text,
+            "priority": priority,
+        })
+    return normalized
+
+
 def load_config(path: Path | str | None = None) -> RobotConfig:
     """从 YAML 文件加载配置，敏感字段始终从环境变量覆盖。
 
@@ -382,6 +486,8 @@ def load_config(path: Path | str | None = None) -> RobotConfig:
                         continue
                     merged.setdefault(cid, {}).update(spec)
                 value = merged
+            if key == "robot_arm_keyword_actions":
+                value = _normalize_robot_arm_keyword_actions(value)
             if key in _PATH_FIELDS and isinstance(value, str) and not Path(value).is_absolute():
                 value = str(base_dir / value)
             setattr(cfg, key, value)

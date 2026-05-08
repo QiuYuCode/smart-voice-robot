@@ -42,11 +42,19 @@ def _build_planner_tools():
         return "navigate called"
 
     @tool
-    def control_robot_arm(action: str) -> str:
-        """控制机械臂执行指定动作。当用户要求抓取、拿起、放下物品时调用。
+    def control_robot_arm(
+        arm_side: str,
+        operation: str,
+        group_name: str = "",
+        action: str = "",
+    ) -> str:
+        """控制机械臂示教流程或执行动作组。
 
         Args:
-            action: 要执行的动作描述，如"抓取杯子"、"放下物品"。
+            arm_side: 机械臂侧别，left 或 right。
+            operation: 操作类型，enter_teach / exit_teach / run_group。
+            group_name: 动作组名称。exit_teach/run_group 时建议传入。
+            action: 原始动作描述，可选。
         """
         return "control_robot_arm called"
 

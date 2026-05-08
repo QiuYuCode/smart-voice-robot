@@ -60,8 +60,13 @@ class PlanExecutor(Behaviour):
             return execute_navigate(destination)
 
         if name == "control_robot_arm":
-            action = args.get("action", "未知动作")
-            return execute_robot_arm(action)
+            return execute_robot_arm(
+                config=self._config,
+                action=args.get("action", ""),
+                arm_side=args.get("arm_side"),
+                operation=args.get("operation"),
+                group_name=args.get("group_name"),
+            )
 
         if name == "control_gripper":
             hand = args.get("hand", "")

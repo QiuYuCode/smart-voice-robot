@@ -273,10 +273,46 @@ class RobotConfig:
         "gripper_control": [
             "左手张开", "右手张开", "左手握手", "右手握手", "动动左手", "动动右手", "左手", "右手", "夹爪"
         ],
-        "robot_arm": ["机械臂", "抓取", "拿起", "放下"],
+        "robot_arm": [
+            "机械臂", "抓取", "拿起", "放下",
+            "进入示教", "开始示教", "开启示教",
+            "退出示教", "结束示教", "停止示教",
+            "示教动作", "动作组", "回放轨迹",
+        ],
         "navigation": ["导航", "前往", "去", "带我去"],
-        "exit": ["退出", "结束", "停止", "没事了", "拜拜", "退下吧"],
+        "exit": ["没事了", "拜拜", "再见"],
     })
+
+    # --- 机械臂示教 ---
+    robot_arm_enabled: bool = True
+    robot_arm_robot: str = "nero"
+    robot_arm_comm: str = "can"
+    robot_arm_firmware: str = "v111"
+    robot_arm_channels: dict[str, str] = field(default_factory=lambda: {
+        "left": "can_left",
+        "right": "can_right",
+    })
+    robot_arm_teach_save_dir: str = "captures/arm_teach"
+    robot_arm_teach_file_template: str = "{arm}_teach_records.json"
+    robot_arm_sample_interval_s: float = 0.005
+    robot_arm_replay_speed_percent: int = 50
+    robot_arm_replay_use_timing: bool = True
+    robot_arm_replay_min_interval_s: float = 0.02
+    robot_arm_replay_send_retries: int = 5
+    robot_arm_replay_retry_backoff_s: float = 0.01
+    robot_arm_replay_max_seconds: float = 45.0
+    robot_arm_replay_max_frames: int = 3000
+    robot_arm_replay_min_delta_rad: float = 0.002
+    robot_arm_joint_limits: list[list[float]] = field(default_factory=lambda: [
+        [-3.2, 3.2],
+        [-2.8, 2.8],
+        [-2.8, 2.8],
+        [-1.012291, 2.146755],
+        [-3.2, 3.2],
+        [-3.2, 3.2],
+        [-3.2, 3.2],
+    ])
+    robot_arm_enable_timeout: float = 10.0
 
     # --- TTS 响应模板 ---
     tts_responses: dict[str, str] = field(default_factory=lambda: {

@@ -143,7 +143,7 @@ def create_tree(
             TakePhotoAction("TakePhoto", config=config),
             RecordVideoAction("RecordVideo", config=config),
             GripperAction("Gripper", config=config),
-            RobotArmAction("RobotArm"),
+            RobotArmAction("RobotArm", config=config),
             NavigationAction("Navigation"),
             LLMDialogAction("LLMDialog", config=config),
             BackToWakeUp("BackToWakeUp"),

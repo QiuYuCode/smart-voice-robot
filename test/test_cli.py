@@ -27,8 +27,6 @@ import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 
-from pathlib import Path
-
 from config import default_config, RobotConfig
 from nodes.intent import RecognizeIntent
 from nodes.guards import DialogContinueGuard
@@ -209,7 +207,7 @@ def create_test_tree(
             TakePhotoAction("TakePhoto", config=config),
             RecordVideoAction("RecordVideo", config=config),
             GripperAction("Gripper", config=config),
-            RobotArmAction("RobotArm"),
+            RobotArmAction("RobotArm", config=config),
             NavigationAction("Navigation"),
             LLMDialogAction("LLMDialog", config=config),
             BackToWakeUp("BackToWakeUp"),
@@ -230,13 +228,33 @@ def create_test_tree(
 # 运行模式
 # ---------------------------------------------------------------------------
 
-def _interactive_source():
+def _build_interactive_source():
     """交互模式：从 stdin 读取一行文本。"""
     try:
-        text = input("[你] ").strip()
-    except EOFError:
-        return None
-    return text or None
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.patch_stdout import patch_stdout
+    except ImportError:
+        def fallback_source():
+            try:
+                text = input("[你] ").strip()
+            except EOFError:
+                return None
+            return text or None
+
+        return fallback_source
+
+    session = PromptSession()
+
+    def prompt_toolkit_source():
+        try:
+            # 防止后台日志输出打乱当前输入行（删字残留、光标错位）。
+            with patch_stdout():
+                text = session.prompt("[你] ").strip()
+        except EOFError:
+            return None
+        return text or None
+
+    return prompt_toolkit_source
 
 
 def _oneshot_source(command: str):
@@ -267,7 +285,7 @@ def _init_tts(config: RobotConfig, enable: bool) -> SimpleTTS | None:
 
 def run_interactive(config: RobotConfig, tts: SimpleTTS | None = None):
     """交互模式：循环接收文本输入，直到用户退出。"""
-    root = create_test_tree(config, _interactive_source, tts=tts)
+    root = create_test_tree(config, _build_interactive_source(), tts=tts)
     loop = py_trees.decorators.SuccessIsRunning(
         name="TestLoop", child=root
     )

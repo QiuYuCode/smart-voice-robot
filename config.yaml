@@ -47,7 +47,7 @@ tts_max_chars_per_chunk: 80
 tts_sentence_pause: 0.40
 tts_clause_pause: 0.15
 # "local" | "iflytek_cloud"
-tts_backend: local
+tts_backend: iflytek_cloud
 cloud_tts_fallback_to_local: true
 
 # --- 讯飞云 TTS 配置 ---
@@ -187,9 +187,38 @@ intent_patterns:
   take_photo: [拍照, 拍张照, 拍个照, 拍一张, 照片]
   record_video: [录像, 录制视频, 录视频, 录一段, 摄像, 拍个视频, 拍视频]
   gripper_control: [左手张开, 右手张开, 左手握手, 右手握手, 动动左手, 动动右手, 左手, 右手, 夹爪]
-  robot_arm: [机械臂, 抓取, 拿起, 放下]
+  robot_arm: [机械臂, 抓取, 拿起, 放下, 进入拖动, 开始拖动, 开启拖动, 退出拖动, 结束拖动, 停止拖动, 拖动动作, 动作组, 回放轨迹]
   navigation: [导航, 前往, 去, 带我去]
-  exit: [退出, 结束, 停止, 没事了, 拜拜, 退下吧]
+  exit: [没事了, 拜拜, 再见]
+
+# --- 机械臂示教 ---
+robot_arm_enabled: true
+robot_arm_robot: nero
+robot_arm_comm: can
+robot_arm_firmware: v111
+robot_arm_channels:
+  left: can_left
+  right: can_right
+robot_arm_teach_save_dir: captures/arm_teach
+robot_arm_teach_file_template: "{arm}_teach_records.json"
+robot_arm_sample_interval_s: 0.005
+robot_arm_replay_speed_percent: 20
+robot_arm_replay_use_timing: true
+robot_arm_replay_min_interval_s: 0.005
+robot_arm_replay_send_retries: 5
+robot_arm_replay_retry_backoff_s: 0.01
+robot_arm_replay_max_seconds: 120.0
+robot_arm_replay_max_frames: 3000
+robot_arm_replay_min_delta_rad: 0.002
+robot_arm_joint_limits:
+  - [-3.2, 3.2]
+  - [-2.8, 2.8]
+  - [-2.8, 2.8]
+  - [-1.012291, 2.146755]
+  - [-3.2, 3.2]
+  - [-3.2, 3.2]
+  - [-3.2, 3.2]
+robot_arm_enable_timeout: 10.0
 
 # --- TTS 响应模板 ---
 tts_responses:

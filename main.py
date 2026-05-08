@@ -10,7 +10,7 @@
     关键词匹配模式 (use_llm_planner=False, 默认):
 
     Root (Sequence, memory=True)
-    ├── WaitForWakeWord (KWS / 硬件唤醒)
+    ├── WaitForWakeWord (KWS 软件唤醒)
     ├── WakeupResponse ("我在，请说")
     └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
         └── DialogLoop (Sequence, memory=False)
@@ -33,7 +33,7 @@
     LLM 规划器模式 (use_llm_planner=True, 支持多指令):
 
     Root (Sequence, memory=True)
-    ├── WaitForWakeWord (KWS / 硬件唤醒)
+    ├── WaitForWakeWord (KWS 软件唤醒)
     ├── WakeupResponse ("我在，请说")
     └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
         └── DialogLoop (Sequence, memory=False)
@@ -62,7 +62,6 @@ from config import default_config, RobotConfig
 from engine import VoiceEngine
 from nodes import (
     WaitForWakeWord,
-    HardwareWakeWord,
     ListenCommand,
     ListenCloudCommand,
     RecognizeIntent,
@@ -171,12 +170,7 @@ def create_tree(
     root = py_trees.composites.Sequence(
         name="Root", memory=True
     )
-    # 根据配置选择唤醒节点
-    if config.wake_mode == "hardware":
-        # DEPRECATED: RK3328 硬件唤醒已弃用
-        wake_node = HardwareWakeWord("WakeWord", engine)
-    else:
-        wake_node = WaitForWakeWord("WakeWord", engine)
+    wake_node = WaitForWakeWord("WakeWord", engine)
 
     root.add_children([
         wake_node,

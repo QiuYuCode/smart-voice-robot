@@ -29,7 +29,7 @@ from py_trees.common import Status
 
 from pathlib import Path
 
-from config import default_config, RobotConfig, SAMPLE_RATE
+from config import default_config, RobotConfig
 from nodes.intent import RecognizeIntent
 from nodes.guards import DialogContinueGuard
 from nodes.planner import LLMTaskPlanner

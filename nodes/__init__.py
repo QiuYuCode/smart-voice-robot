@@ -1,7 +1,6 @@
 """行为树节点模块"""
 
 from nodes.wake_word import WaitForWakeWord
-from nodes.hw_wake_word import HardwareWakeWord
 from nodes.listen import ListenCommand
 from nodes.listen_cloud import ListenCloudCommand
 from nodes.intent import RecognizeIntent
@@ -30,7 +29,6 @@ from nodes.actions import (
 
 __all__ = [
     "WaitForWakeWord",
-    "HardwareWakeWord",
     "ListenCommand",
     "ListenCloudCommand",
     "RecognizeIntent",

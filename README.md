@@ -58,7 +58,6 @@ block-beta
 
     block:EXT["外部服务"]:3
         LLM["LLM (多 Provider)\nOllama / OpenAI / DeepSeek / Anthropic"]
-        RK["RK3328 降噪板\n硬件唤醒 (可选)"]
         ROS["ROS 导航 (预留)"]
     end
 
@@ -78,7 +77,7 @@ block-beta
 | **硬件层** | 麦克风、扬声器、相机、机械臂 | 音频采集与播放、外设交互 |
 | **语音引擎** | `VoiceEngine` | 管理 KWS/ASR/VAD/TTS 模型，维护音频队列 |
 | **行为树** | `py_trees.BehaviourTree` | 决策调度核心，tick 驱动所有节点 |
-| **外部服务** | LLM (多 Provider)、RK3328 降噪板、ROS（预留） | 大模型对话/任务规划、硬件唤醒、机器人导航 |
+| **外部服务** | LLM (多 Provider)、ROS（预留） | 大模型对话/任务规划、机器人导航 |
 
 ---
 
@@ -95,7 +94,7 @@ block-beta
 ```mermaid
 graph TD
     Root["⟶ Root<br/><i>Sequence(memory=True)</i>"]
-    WakeWord["🎤 WaitForWakeWord<br/>KWS / 硬件唤醒<br/><small>RUNNING → SUCCESS</small>"]
+    WakeWord["🎤 WaitForWakeWord<br/>KWS 软件唤醒<br/><small>RUNNING → SUCCESS</small>"]
     WakeupSound["🔊 WakeupResponse<br/>播放 '我在，请说'<br/><small>阻塞式 TTS → SUCCESS</small>"]
     DialogRepeat["↻ DialogRepeat<br/><i>SuccessIsRunning 装饰器</i><br/><small>将 SUCCESS 映射为 RUNNING<br/>FAILURE 透传 → 回到唤醒</small>"]
     DialogLoop["⟶ DialogLoop<br/><i>Sequence(memory=False)</i><br/><small>每轮完成后自动重置</small>"]
@@ -156,7 +155,7 @@ graph TD
 ```mermaid
 graph TD
     Root2["⟶ Root<br/><i>Sequence(memory=True)</i>"]
-    WakeWord2["🎤 WaitForWakeWord<br/>KWS / 硬件唤醒"]
+    WakeWord2["🎤 WaitForWakeWord<br/>KWS 软件唤醒"]
     WakeupSound2["🔊 WakeupResponse<br/>播放 '我在，请说'"]
     DialogRepeat2["↻ DialogRepeat<br/><i>SuccessIsRunning 装饰器</i>"]
     DialogLoop2["⟶ DialogLoop<br/><i>Sequence(memory=False)</i>"]
@@ -417,7 +416,6 @@ flowchart LR
 | 节点 | 文件 | 功能 | Blackboard I/O |
 |------|------|------|----------------|
 | `WaitForWakeWord` | `nodes/wake_word.py` | 软件 KWS 唤醒词检测 (`wake_mode=software`) | 无 (直接消费 audio_queue) |
-| ~~`HardwareWakeWord`~~ | `nodes/hw_wake_word.py` | *(DEPRECATED)* RK3328 降噪板硬件唤醒 | — |
 | `WakeupResponse` | `nodes/speak.py` | 播放唤醒提示音 "我在，请说" (阻塞式 TTS) | 无 |
 | `ListenCommand` | `nodes/listen.py` | 流式 ASR + VAD 检测。ASR 端点+有文本→SUCCESS；VAD 静默超时→FAILURE | Write: `user_command`, `last_activity_time` |
 | `RecognizeIntent` | `nodes/intent.py` | 关键词匹配意图，无匹配则设为 `chat`（仅关键词匹配模式） | Read: `user_command` / Write: `intent` |
@@ -509,7 +507,6 @@ smart-voice-robot/
 ├── nodes/
 │   ├── __init__.py                  # 节点模块导出
 │   ├── wake_word.py                 # WaitForWakeWord - 软件唤醒词检测
-│   ├── hw_wake_word.py              # HardwareWakeWord - 硬件唤醒 (DEPRECATED)
 │   ├── listen.py                    # ListenCommand - 流式 ASR + VAD 静默超时
 │   ├── intent.py                    # RecognizeIntent - 关键词意图识别
 │   ├── speak.py                     # SpeakResponse + WakeupResponse - TTS
@@ -606,7 +603,6 @@ ollama pull qwen2.5:3b
 | `langchain-core` | latest | LangChain 消息类型 & Tool 定义 |
 | `ollama` | >= 0.6.1 | Ollama Python SDK |
 | `opencv-python` | >= 4.13.0 | 相机拍照/录像 |
-| `pyserial` | >= 3.5 | RK3328 串口通信 |
 
 ### 可选依赖
 

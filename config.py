@@ -296,7 +296,7 @@ class RobotConfig:
 
     # --- 系统 ---
     tick_interval: float = 0.05  # 主循环心跳间隔 (秒)
-    num_threads: int = 2  # 模型推理线程数
+    num_threads: int = 5  # 模型推理线程数
     onnx_provider: str = "cpu"  # ONNX 推理设备: "cuda" | "cpu"
     verbose: bool = True
 

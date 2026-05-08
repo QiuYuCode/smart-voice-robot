@@ -42,7 +42,6 @@ uv run test/test_cli.py --provider deepseek     # 指定 LLM 提供商
 | `main.py` | 入口；构建并驱动行为树 |
 | `config.py` | 统一的 `RobotConfig` 数据类 — 所有参数集中于此 |
 | `engine.py` | `VoiceEngine` — 管理 KWS/ASR/VAD/TTS 模型生命周期和音频队列 |
-| `rk3328.py` | RK3328 硬件降噪板的串口协议驱动 |
 | `nodes/` | 所有行为树节点实现 |
 | `nodes/actions/` | 动作节点（摄像头、视觉、LLM 对话、机械臂、导航） |
 | `test/test_cli.py` | 无硬件测试的 CLI 工具（使用 `SimpleTTS`） |
@@ -79,6 +78,6 @@ LLM_API_KEY                                  # OpenAI / DeepSeek / Anthropic
 完整规范见 `AGENTS.md`。要点：
 - Python 3.10+，使用 `from __future__ import annotations`
 - 类型提示使用联合语法：`float | None` 而非 `Optional[float]`
-- Google 风格文档字符串，中文或英文均可
+- Google 风格文档字符串，中文
 - 动作节点：意图不匹配时返回 `Status.FAILURE`（Selector 模式）
 - 可选导入用 `try/except ImportError` 包裹，并将模块设为 `None`

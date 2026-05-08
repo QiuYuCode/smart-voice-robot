@@ -1,7 +1,6 @@
 """唤醒词检测节点"""
 
 import numpy as np
-import py_trees
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 

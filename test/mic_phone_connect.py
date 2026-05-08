@@ -1,5 +1,4 @@
 import serial
-import time
 
 serial = serial.Serial('/dev/ttyUSB0', 115200)
 

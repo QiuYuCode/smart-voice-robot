@@ -45,3 +45,8 @@ explicit = true
 sherpa-onnx = { path = "../sherpa-onnx" }
 pyagxarm = {path = "../pyAgxArm" }
 dexhand_sdk_python = {path = "../dexhand_sdk_python"}
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+]

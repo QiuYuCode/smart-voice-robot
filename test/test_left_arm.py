@@ -1,5 +1,4 @@
 import time
-from pprint import pprint
 from pyAgxArm import AgxArmFactory, create_agx_arm_config
 
 

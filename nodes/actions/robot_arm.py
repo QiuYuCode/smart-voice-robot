@@ -45,6 +45,15 @@ class ParsedRobotArmCommand:
     raw_command: str
 
 
+@dataclass
+class MatchedKeywordAction:
+    arm_side: str
+    group_name: str
+    response_text: str
+    priority: int
+    matched_keyword: str
+
+
 class ArmTeachRuntime:
     """单机械臂示教运行时。"""
 
@@ -420,6 +429,68 @@ def _extract_group_name(command: str) -> str | None:
     return None
 
 
+def _iter_normalized_keyword_actions(config: RobotConfig) -> list[dict[str, Any]]:
+    raw = getattr(config, "robot_arm_keyword_actions", []) or []
+    if not isinstance(raw, list):
+        return []
+    actions: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        keywords_raw = item.get("keywords", [])
+        if isinstance(keywords_raw, str):
+            keywords_raw = [keywords_raw]
+        if not isinstance(keywords_raw, list):
+            continue
+        keywords = [str(k).strip() for k in keywords_raw if str(k).strip()]
+        arm_side = _normalize_side(str(item.get("arm_side", "")).strip().lower())
+        group_name = str(item.get("group_name", "")).strip()
+        response_text = str(item.get("response_text", "")).strip()
+        if not keywords or not arm_side or not group_name:
+            continue
+        try:
+            priority = int(item.get("priority", 0))
+        except Exception:
+            priority = 0
+        actions.append({
+            "keywords": keywords,
+            "arm_side": arm_side,
+            "group_name": group_name,
+            "response_text": response_text,
+            "priority": priority,
+        })
+    return actions
+
+
+def resolve_keyword_robot_arm_action(
+    config: RobotConfig,
+    command: str,
+) -> MatchedKeywordAction | None:
+    """按 priority + 关键词长度 匹配机械臂动作映射。"""
+    if not command:
+        return None
+    matched: list[MatchedKeywordAction] = []
+    for item in _iter_normalized_keyword_actions(config):
+        for keyword in item["keywords"]:
+            if keyword in command:
+                matched.append(MatchedKeywordAction(
+                    arm_side=item["arm_side"],
+                    group_name=item["group_name"],
+                    response_text=item["response_text"],
+                    priority=item["priority"],
+                    matched_keyword=keyword,
+                ))
+
+    if not matched:
+        return None
+
+    matched.sort(
+        key=lambda x: (x.priority, len(x.matched_keyword)),
+        reverse=True,
+    )
+    return matched[0]
+
+
 def parse_robot_arm_command(command: str) -> ParsedRobotArmCommand:
     side = None
     if any(k in command for k in ["左臂", "左手", "左边", "左机械臂"]):
@@ -467,6 +538,22 @@ def execute_robot_arm(
     """机械臂示教控制入口。"""
     if not config.robot_arm_enabled:
         return "机械臂功能未启用。"
+
+    mapped = resolve_keyword_robot_arm_action(config=config, command=action or "")
+    if mapped is not None:
+        manager = _get_manager(config)
+        logger.info(
+            "命中机械臂关键词映射: keyword={} side={} group={} priority={}",
+            mapped.matched_keyword,
+            mapped.arm_side,
+            mapped.group_name,
+            mapped.priority,
+        )
+        manager.run_group(mapped.arm_side, mapped.group_name)
+        if mapped.response_text:
+            return mapped.response_text
+        side_text = "左臂" if mapped.arm_side == "left" else "右臂"
+        return f"{side_text}已执行动作组“{mapped.group_name}”"
 
     parsed = parse_robot_arm_command(action or "")
     resolved_side = _normalize_side(arm_side) or parsed.arm_side

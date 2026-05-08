@@ -278,10 +278,30 @@ class RobotConfig:
             "进入示教", "开始示教", "开启示教",
             "退出示教", "结束示教", "停止示教",
             "示教动作", "动作组", "回放轨迹",
+            "挥手", "打招呼", "你好",
         ],
         "navigation": ["导航", "前往", "去", "带我去"],
         "exit": ["没事了", "拜拜", "再见"],
     })
+
+    # --- 机械臂关键词动作组映射 ---
+    # 命中后统一转为 run_group 执行；priority 越大优先级越高
+    robot_arm_keyword_actions: list[dict[str, Any]] = field(default_factory=lambda: [
+        {
+            "keywords": ["挥手", "打招呼"],
+            "arm_side": "right",
+            "group_name": "wave",
+            "response_text": "",
+            "priority": 100,
+        },
+        {
+            "keywords": ["你好"],
+            "arm_side": "right",
+            "group_name": "wave",
+            "response_text": "你好，很高兴见到你。",
+            "priority": 120,
+        },
+    ])
 
     # --- 机械臂示教 ---
     robot_arm_enabled: bool = True
@@ -371,6 +391,54 @@ _PATH_FIELDS: frozenset[str] = frozenset({
 })
 
 
+def _normalize_robot_arm_keyword_actions(value: Any) -> list[dict[str, Any]]:
+    """归一化机械臂关键词映射配置。"""
+    if not isinstance(value, list):
+        logger.warning("[config] robot_arm_keyword_actions 应为 list，已忽略。")
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for idx, item in enumerate(value):
+        if not isinstance(item, dict):
+            logger.warning(f"[config] robot_arm_keyword_actions[{idx}] 应为 dict，已忽略。")
+            continue
+        keywords_raw = item.get("keywords", [])
+        if isinstance(keywords_raw, str):
+            keywords_raw = [keywords_raw]
+        if not isinstance(keywords_raw, list):
+            logger.warning(
+                f"[config] robot_arm_keyword_actions[{idx}].keywords 应为 list[str]，已忽略。"
+            )
+            continue
+        keywords = [str(k).strip() for k in keywords_raw if str(k).strip()]
+        arm_side = str(item.get("arm_side", "")).strip().lower()
+        group_name = str(item.get("group_name", "")).strip()
+        response_text = str(item.get("response_text", "")).strip()
+        priority = item.get("priority", 0)
+        try:
+            priority = int(priority)
+        except Exception:
+            logger.warning(
+                f"[config] robot_arm_keyword_actions[{idx}].priority 非法，已降级为 0。"
+            )
+            priority = 0
+
+        if not keywords or arm_side not in {"left", "right"} or not group_name:
+            logger.warning(
+                f"[config] robot_arm_keyword_actions[{idx}] 缺少必要字段，已忽略。"
+            )
+            continue
+
+        normalized.append({
+            "keywords": keywords,
+            "arm_side": arm_side,
+            "group_name": group_name,
+            "response_text": response_text,
+            "priority": priority,
+        })
+    return normalized
+
+
 def load_config(path: Path | str | None = None) -> RobotConfig:
     """从 YAML 文件加载配置，敏感字段始终从环境变量覆盖。
 
@@ -418,6 +486,8 @@ def load_config(path: Path | str | None = None) -> RobotConfig:
                         continue
                     merged.setdefault(cid, {}).update(spec)
                 value = merged
+            if key == "robot_arm_keyword_actions":
+                value = _normalize_robot_arm_keyword_actions(value)
             if key in _PATH_FIELDS and isinstance(value, str) and not Path(value).is_absolute():
                 value = str(base_dir / value)
             setattr(cfg, key, value)

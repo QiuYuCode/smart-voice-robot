@@ -1,0 +1,7 @@
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0d8c", ATTR{idProduct}=="0012", RUN+="/usr/bin/su create -c /home/create/scripts/lock_audio.sh"
+
+# 当插入 C-Media 扬声器时触发
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0d8c", ATTR{idProduct}=="0012", RUN+="/usr/bin/su create -c /home/create/scripts/lock_audio.sh"
+
+# 当插入 Rockchip 麦克风时触发
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0001", RUN+="/usr/bin/su create -c /home/create/scripts/lock_audio.sh"

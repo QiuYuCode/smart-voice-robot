@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover
 @dataclass
 class CameraSpec:
     """单路相机配置。"""
-    index: int = 0
+    index: int | str = 0
     width: int = 640
     height: int = 480
     ros_topic: str = ""
@@ -47,8 +47,16 @@ def _resolve_spec(config, camera_id: str) -> CameraSpec:
         raise ValueError(
             f"未定义相机 {camera_id!r}，可用: {list(config.cameras.keys())}"
         )
+    index = raw.get("index", 0)
+    # 支持两种写法：
+    # 1) 数字索引: 0 / 2 / 4
+    # 2) 设备路径: /dev/camera_left
+    if isinstance(index, str):
+        stripped = index.strip()
+        index = int(stripped) if stripped.isdigit() else stripped
+
     return CameraSpec(
-        index=int(raw.get("index", 0)),
+        index=index,
         width=int(raw.get("width", 640)),
         height=int(raw.get("height", 480)),
         ros_topic=str(raw.get("ros_topic", "")),
@@ -94,7 +102,7 @@ def _preferred_backend():
 
 
 class LocalCameraSource(CameraSource):
-    """通过 cv2.VideoCapture(index) 直连本机 USB 摄像头。"""
+    """通过 cv2.VideoCapture(index_or_device_path) 直连本机 USB 摄像头。"""
 
     def __init__(self, camera_id: str, spec: CameraSpec):
         if cv2 is None:
@@ -106,7 +114,7 @@ class LocalCameraSource(CameraSource):
         cap = cv2.VideoCapture(self.spec.index, _preferred_backend())
         if not cap.isOpened():
             raise RuntimeError(
-                f"相机 {self.camera_id} 打开失败 (index={self.spec.index})。"
+                f"相机 {self.camera_id} 打开失败 (source={self.spec.index})。"
             )
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.spec.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.spec.height)

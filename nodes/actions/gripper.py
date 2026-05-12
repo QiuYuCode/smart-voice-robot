@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -15,11 +17,26 @@ from py_trees.common import Status
 
 from config import RobotConfig
 
+_DEXHAND_IMPORT_ERROR: Exception | None = None
 try:
     from dexhand.dexhand import AdapterType, DexHand021S
-except (ImportError, OSError):
-    AdapterType = None
-    DexHand021S = None
+except (ImportError, OSError) as e:
+    _DEXHAND_IMPORT_ERROR = e
+    # 回退：在未走 uv 环境时，尝试从仓库同级目录加载 dexhand_sdk_python。
+    repo_root = Path(__file__).resolve().parents[2]
+    local_dexhand_repo = repo_root.parent / "dexhand_sdk_python"
+    if local_dexhand_repo.exists():
+        sys.path.insert(0, str(local_dexhand_repo))
+        try:
+            from dexhand.dexhand import AdapterType, DexHand021S
+            _DEXHAND_IMPORT_ERROR = None
+        except (ImportError, OSError) as inner_e:
+            _DEXHAND_IMPORT_ERROR = inner_e
+            AdapterType = None
+            DexHand021S = None
+    else:
+        AdapterType = None
+        DexHand021S = None
 
 
 _HAND_ALIASES = {
@@ -78,7 +95,8 @@ class DexHandManager:
 
     def _adapter_type(self) -> Any:
         if AdapterType is None:
-            raise RuntimeError("未安装 dexhand SDK，请先安装并配置 dexhand_sdk_python。")
+            detail = f" 原始错误: {_DEXHAND_IMPORT_ERROR}" if _DEXHAND_IMPORT_ERROR else ""
+            raise RuntimeError(f"未安装 dexhand SDK，请先安装并配置 dexhand_sdk_python。{detail}")
 
         mapping = {
             "zlg_mini": AdapterType.ZLG_MINI,
@@ -105,7 +123,8 @@ class DexHandManager:
                 return self._hands[side], self._hand_spec(side)
 
             if DexHand021S is None:
-                raise RuntimeError("未安装 dexhand SDK，请先安装并配置 dexhand_sdk_python。")
+                detail = f" 原始错误: {_DEXHAND_IMPORT_ERROR}" if _DEXHAND_IMPORT_ERROR else ""
+                raise RuntimeError(f"未安装 dexhand SDK，请先安装并配置 dexhand_sdk_python。{detail}")
 
             spec = self._hand_spec(side)
             if self._hands:
@@ -181,6 +200,11 @@ def _move_all_fingers(
             time.sleep(inter_finger_delay)
 
 
+def _clear_finger_errors(hand: Any, device_id: int, finger_ids: list[int]) -> None:
+    for finger_id in finger_ids:
+        hand.clear_error(device_id, finger_id)
+
+
 def _read_pressure_text(hand: Any, spec: _HandSpec, finger_ids: list[int]) -> str:
     """返回仅含中文的简短说明，避免本地 VITS 对英文/冒号/数字发音崩溃。"""
     if not spec.has_pressure_sensor:
@@ -234,6 +258,7 @@ def execute_gripper_action(config: RobotConfig, command_or_args: str | dict[str,
             finger_ids,
             inter,
         )
+        _clear_finger_errors(hand, spec.device_id, finger_ids)
         time.sleep(max(pause_open, 0.35))
         return f"{'左' if side == 'left' else '右'}手已张开。"
 
@@ -248,6 +273,7 @@ def execute_gripper_action(config: RobotConfig, command_or_args: str | dict[str,
             finger_ids,
             inter,
         )
+        _clear_finger_errors(hand, spec.device_id, finger_ids)
         time.sleep(max(0.35, pause_close * 0.5))
         pressure_text = _read_pressure_text(hand, spec, finger_ids)
         return f"{'左' if side == 'left' else '右'}手已握紧。{pressure_text}".rstrip("。") + "。"
@@ -264,6 +290,7 @@ def execute_gripper_action(config: RobotConfig, command_or_args: str | dict[str,
             finger_ids,
             inter,
         )
+        _clear_finger_errors(hand, spec.device_id, finger_ids)
         time.sleep(pause_close)
         _move_all_fingers(
             hand,
@@ -275,6 +302,7 @@ def execute_gripper_action(config: RobotConfig, command_or_args: str | dict[str,
             finger_ids,
             inter,
         )
+        _clear_finger_errors(hand, spec.device_id, finger_ids)
         time.sleep(pause_open)
     pressure_text = _read_pressure_text(hand, spec, finger_ids)
     return f"{'左' if side == 'left' else '右'}手动了一下。{pressure_text}".rstrip("。") + "。"

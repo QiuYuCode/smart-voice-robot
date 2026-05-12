@@ -14,6 +14,7 @@
 - [Blackboard 数据共享](#blackboard-数据共享)
 - [项目结构](#项目结构)
 - [依赖与安装](#依赖与安装)
+- [本机 Jetson（L4T 36.4 + CUDA 12.6）与 uv](#jetson-uv-env)
 - [sherpa-onnx GPU 编译（可选）](#sherpa-onnx-gpu-编译可选)
 - [配置说明](#配置说明)
 - [远端摄像头（三路）](#远端摄像头三路)
@@ -530,6 +531,11 @@ smart-voice-robot/
 ├── model/                           # 模型文件目录 (gitignore)
 ├── examples/
 │   └── pytree_lifycycle.py          # py_trees 生命周期演示
+├── env/
+│   └── jetson-sherpa-cuda.sh        # Jetson 运行期 CUDA 路径 + 并行编译（可选）
+├── scripts/
+│   ├── remote_camera_server.py      # 远端摄像头 HTTP 服务（见 README）
+│   └── uv_sync_jetson_cuda.sh       # 加载 env 后 uv sync（可选，R36+ 裸 uv sync 已默编 GPU）
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -569,6 +575,39 @@ smart-voice-robot/
 > # 下载地址格式相同，替换文件名即可
 > ```
 
+<a id="jetson-uv-env"></a>
+
+### 本机 Jetson（L4T 36.4 + CUDA 12.6）与 uv
+
+在 **Createrobot** 板卡上已核对：`aarch64`，**L4T 36.4.3**（`/etc/nv_tegra_release` 首行含 **R36**），**CUDA 12.6**，**cuDNN 9.x**。
+
+**默认安装 CUDA 版 sherpa-onnx（本地 path 依赖时）**：并列目录 [`../sherpa-onnx`](../sherpa-onnx) 里的 `cmake/cmake_extension.py` 会在检测到 **Jetson + L4T R36+** 且环境变量里**未**出现 `SHERPA_ONNX_ENABLE_GPU` 时，自动追加 `-DSHERPA_ONNX_ENABLE_GPU=ON` 与 `-DSHERPA_ONNX_LINUX_ARM64_GPU_ONNXRUNTIME_VERSION=1.18.1`。因此在 JP6 类板卡上**直接**在项目根执行即可编出 GPU 绑定：
+
+```bash
+rm -rf ../sherpa-onnx/build   # 首次或换 Python/uv 缓存后建议清理
+uv sync
+```
+
+构建日志中会出现 `[sherpa-onnx] Jetson L4T R36+: appending default GPU CMake flags: ...`。
+
+| 场景 | 操作 |
+|------|------|
+| **L4T R36+**，要 GPU 版 | 仅 `uv sync`（如上） |
+| **L4T R36+**，要强制 CPU 版 | `SHERPA_ONNX_CMAKE_ARGS="-DSHERPA_ONNX_ENABLE_GPU=OFF" uv sync` |
+| **L4T R35 及以下**（如旧 Nano / JP5） | 不设自动 GPU；请自行设置 `SHERPA_ONNX_CMAKE_ARGS`，见 `sherpa-onnx/cmake/onnxruntime-linux-aarch64-gpu.cmake` |
+| **非 Jetson 的 aarch64**（如 RK3588） | 无自动逻辑；按需手写 CMake 参数 |
+
+[`env/jetson-sherpa-cuda.sh`](env/jetson-sherpa-cuda.sh) 与 [`scripts/uv_sync_jetson_cuda.sh`](scripts/uv_sync_jetson_cuda.sh) 仍有用：为**运行期**提供 `CUDA_HOME` / `LD_LIBRARY_PATH` 与并行编译线程数（`uv` **不会**自动读 `.env`）。
+
+编译完成后在 `config.yaml` 将 `onnx_provider` 设为 `cuda`（见下文 [运行期配置](#运行期配置)）。
+
+**运行应用时**（建议先 source，避免找不到 `libcudart` 等）：
+
+```bash
+source env/jetson-sherpa-cuda.sh
+uv run main.py
+```
+
 ### 安装依赖
 
 ```bash
@@ -576,11 +615,8 @@ smart-voice-robot/
 git clone <repo-url>
 cd smart-voice-robot
 
-# 使用 uv 安装依赖
+# 使用 uv 安装依赖（含本地 path 的 sherpa-onnx；Jetson L4T R36+ 上默认编 GPU 版）
 uv sync
-
-# 若 pyproject.toml 将 sherpa-onnx 指到本地源码（GPU 版），请先按下文
-# [sherpa-onnx GPU 编译（可选）](#sherpa-onnx-gpu-编译可选) 完成编译再 uv sync。
 
 # 安装在线 LLM 支持 (可选)
 uv sync --extra openai       # OpenAI / DeepSeek
@@ -596,7 +632,7 @@ ollama pull qwen2.5:3b
 | 包 | 版本 | 用途 |
 |---|---|---|
 | `py-trees` | >= 2.4.0 | 行为树框架 |
-| `sherpa-onnx` | 见 `pyproject.toml` / `[tool.uv.sources]` | KWS / ASR / TTS 推理引擎（可来自 PyPI CPU 版或本地 GPU 源码构建） |
+| `sherpa-onnx` | 见 `pyproject.toml` / `[tool.uv.sources]` | KWS / ASR / TTS；PyPI 多为 CPU 轮子；本地源码在 Jetson **L4T R36+** 上默认编 CUDA ORT |
 | `sounddevice` | >= 0.5.5 | 音频采集与播放 |
 | `numpy` | latest | 音频数据处理 |
 | `langchain-ollama` | latest | Ollama LLM 接口 |
@@ -626,21 +662,19 @@ PyPI 上的 `sherpa-onnx` 通常只带 **CPU** 版 ONNX Runtime。若在 **NVIDI
 
 ### 编译与安装（uv）
 
-在项目根目录执行（将路径按你的源码位置调整）：
+**Jetson L4T R36+（JP6 / CUDA 12.x）**：见上文 [本机 Jetson…](#jetson-uv-env)，在项目根 **`uv sync` 即可** 编出带 CUDA 的 ONNX Runtime；无需再手抄 `SHERPA_ONNX_CMAKE_ARGS`（除非你覆盖 ORT 版本或强制 CPU）。
+
+**L4T R35 及以下**或其它 CUDA 主版本：请对照 sherpa-onnx 中 `cmake/onnxruntime-linux-aarch64-gpu.cmake` 自行设置 `SHERPA_ONNX_CMAKE_ARGS`（例如 Nano + CUDA 10.2 用 `1.11.0`，部分 Orin + CUDA 11.4 用 `1.16.0`）。
+
+通用步骤：
 
 ```bash
-# 可选：清理上次失败残留
-rm -rf /path/to/sherpa-onnx/build/
-
+rm -rf ../sherpa-onnx/build/
 cd smart-voice-robot
-
-# Jetson Orin + CUDA 12.x（与 sherpa-onnx cmake 说明一致时）使用 onnxruntime 1.18.1
-CUDA_HOME=/usr/local/cuda \
-SHERPA_ONNX_CMAKE_ARGS="-DSHERPA_ONNX_ENABLE_GPU=ON -DSHERPA_ONNX_LINUX_ARM64_GPU_ONNXRUNTIME_VERSION=1.18.1" \
-  uv add /path/to/sherpa-onnx
+uv sync
 ```
 
-若未使用 `[tool.uv.sources]`，也可在一次性安装后把 `pyproject.toml` 改为 `sherpa-onnx = { path = "../sherpa-onnx" }` 并执行 `uv lock` / `uv sync`。
+若未使用 `[tool.uv.sources]`，需先把 `pyproject.toml` 改为 `sherpa-onnx = { path = "../sherpa-onnx" }` 并执行 `uv lock` / `uv sync`。
 
 编译成功时，安装包名类似 `sherpa-onnx==x.y.z+cuda`，虚拟环境内 `site-packages/sherpa_onnx/lib/` 下应出现 `libonnxruntime_providers_cuda.so`（以及可选的 TensorRT 相关 `.so`）。可用 `ldd` 检查该文件是否解析到系统的 `libcudart`、`libcudnn` 等。
 

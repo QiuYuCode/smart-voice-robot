@@ -41,6 +41,7 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+# path 依赖的 sherpa-onnx：L4T R36+ Jetson 上构建会自动开 GPU（见该仓库 cmake/cmake_extension.py）；旧板或 x86 见 README。
 [tool.uv.sources]
 sherpa-onnx = { path = "../sherpa-onnx" }
 pyagxarm = {path = "../pyAgxArm" }

@@ -71,6 +71,7 @@ output_device_hint: C-Media
 
 # --- 对话 ---
 dialog_timeout: 30.0  # 秒，无活动后超时回到 idle
+continuous_dialog: false  # false: 每次回复后回到唤醒；true: 唤醒后连续对话
 interrupt_min_speech_seconds: 0.6  # TTS 启动后延迟启用打断
 
 # --- 相机 ---

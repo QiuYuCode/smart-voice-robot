@@ -7,11 +7,11 @@ from py_trees.common import Status
 
 class DialogContinueGuard(Behaviour):
     """
-    对话循环继续守卫。
+    对话回合结束守卫。
 
     放在 DialogLoop (Sequence) 的最后一个子节点。
     检测当前轮对话的 intent：
-      - intent != "exit" → SUCCESS (对话循环继续)
+      - intent != "exit" → SUCCESS (本轮正常结束；是否连续由 main.py 决定)
       - intent == "exit" → FAILURE (打断 DialogLoop → 传播至 Root → 回到唤醒)
     """
 

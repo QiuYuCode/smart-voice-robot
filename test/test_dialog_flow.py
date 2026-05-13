@@ -8,10 +8,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import py_trees
+try:
+    import py_trees
 
-from config import RobotConfig
-from main import create_tree
+    from config import RobotConfig
+    from main import create_tree
+except ModuleNotFoundError as exc:
+    py_trees = None
+    RobotConfig = None
+    create_tree = None
+    _IMPORT_ERROR = exc
+else:
+    _IMPORT_ERROR = None
 
 
 class _DummyEngine:
@@ -22,6 +30,10 @@ class _DummyEngine:
 
 
 class DialogFlowTests(unittest.TestCase):
+    def setUp(self):
+        if _IMPORT_ERROR is not None:
+            self.skipTest(f"项目依赖未安装: {_IMPORT_ERROR}")
+
     def test_default_dialog_finishes_after_one_response(self):
         """默认不包 DialogRepeat，DialogLoop SUCCESS 会让 Root 回到唤醒。"""
         config = RobotConfig()

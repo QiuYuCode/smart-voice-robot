@@ -71,12 +71,12 @@ output_device_hint: C-Media
 
 # --- 对话 ---
 dialog_timeout: 30.0  # 秒，无活动后超时回到 idle
-continuous_dialog: false  # false: 每次回复后回到唤醒；true: 唤醒后连续对话
+continuous_dialog: true  # false: 每次回复后回到唤醒；true: 唤醒后连续对话
 interrupt_min_speech_seconds: 0.6  # TTS 启动后延迟启用打断
 
 # --- 相机 ---
 # 后端: "local" (本机 USB) | "http" (远端 FastAPI) | "ros" (rclpy + cv_bridge)
-camera_backend: http
+camera_backend: local
 default_camera: head   # describe_scene/take_photo/record_video 默认相机
 
 # HTTP 后端 (远端 10.168.1.101 上跑 scripts/remote_camera_server.py)
@@ -92,19 +92,19 @@ camera_ros_warmup_seconds: 2.0
 # index: 远端 /dev/videoN ; ros_topic: rclpy 订阅话题
 cameras:
   head:
-    index: 0
+    index: /dev/camera_head_rgb
     width: 640
     height: 480
     ros_topic: /camera/color/image_raw
     record_fps: 30.0
   left_palm:
-    index: 0
+    index: /dev/camera_left
     width: 640
     height: 480
     ros_topic: /left_gripper/image_raw
     record_fps: 30.0
   right_palm:
-    index: 2
+    index: /dev/camera_right
     width: 640
     height: 480
     ros_topic: /right_gripper/image_raw
@@ -139,7 +139,7 @@ left_gripper:
 right_gripper:
   adapter_index: 1
   device_id: 2
-  has_pressure_sensor: true
+  has_pressure_sensor: false
 
 # --- LLM ---
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"

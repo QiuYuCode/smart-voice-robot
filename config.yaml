@@ -130,15 +130,18 @@ gripper_second_hand_init_delay: 0.5
 gripper_inter_finger_delay: 0.04
 gripper_post_reset_sleep: 0.45
 gripper_exec_delay_ms: 10
+gripper_auto_detect_device_id: true
 gripper_set_safe_current: true
 gripper_safe_current: 250
 left_gripper:
   adapter_index: 0
+  channel: 0
   device_id: 1
   has_pressure_sensor: false
 right_gripper:
   adapter_index: 1
-  device_id: 2
+  channel: 0
+  device_id: 1
   has_pressure_sensor: false
 
 # --- LLM ---

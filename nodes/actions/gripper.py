@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -81,7 +81,8 @@ _ACTION_ALIASES: dict[str, str] = {
 class _HandSpec:
     side: str
     adapter_index: int
-    device_id: int
+    channel: int
+    device_id: int | None
     has_pressure_sensor: bool
 
 
@@ -91,7 +92,7 @@ class DexHandManager:
     def __init__(self, config: RobotConfig):
         self._config = config
         self._lock = Lock()
-        self._hands: dict[str, Any] = {}
+        self._hands: dict[str, tuple[Any, _HandSpec]] = {}
 
     def _adapter_type(self) -> Any:
         if AdapterType is None:
@@ -113,14 +114,68 @@ class DexHandManager:
         return _HandSpec(
             side=side,
             adapter_index=int(raw.get("adapter_index", 0)),
-            device_id=int(raw.get("device_id", 0x01)),
+            channel=int(raw.get("channel", 0)),
+            device_id=self._parse_device_id(raw.get("device_id", 0x01)),
             has_pressure_sensor=bool(raw.get("has_pressure_sensor", False)),
         )
+
+    @staticmethod
+    def _parse_device_id(value: Any) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip().lower()
+            if text in {"", "auto", "none", "null"}:
+                return None
+            return int(text, 0)
+        return int(value)
+
+    def _resolve_device_id(self, hand: Any, spec: _HandSpec) -> int:
+        auto_detect = bool(getattr(self._config, "gripper_auto_detect_device_id", True))
+        if not auto_detect:
+            if spec.device_id is None:
+                raise RuntimeError(f"{spec.side} 手 device_id 未配置，且已关闭自动发现。")
+            return spec.device_id
+
+        try:
+            detected = int(hand.get_device_id(channel=spec.channel))
+        except Exception as exc:
+            if spec.device_id is None:
+                raise RuntimeError(
+                    f"{spec.side} 手无法从通道 {spec.channel} 自动读取 device_id。"
+                ) from exc
+            logger.warning(
+                "{} 手自动读取 device_id 失败，回退使用配置值 {}: {}",
+                spec.side,
+                spec.device_id,
+                exc,
+            )
+            return spec.device_id
+
+        if detected <= 0:
+            if spec.device_id is None:
+                raise RuntimeError(f"{spec.side} 手读取到非法 device_id: {detected}")
+            logger.warning(
+                "{} 手读取到非法 device_id={}，回退使用配置值 {}",
+                spec.side,
+                detected,
+                spec.device_id,
+            )
+            return spec.device_id
+
+        if spec.device_id is not None and detected != spec.device_id:
+            logger.warning(
+                "{} 手配置 device_id={}，实际读取到 device_id={}，按实际值下发指令。",
+                spec.side,
+                spec.device_id,
+                detected,
+            )
+        return detected
 
     def get_hand(self, side: str) -> tuple[Any, _HandSpec]:
         with self._lock:
             if side in self._hands:
-                return self._hands[side], self._hand_spec(side)
+                return self._hands[side]
 
             if DexHand021S is None:
                 detail = f" 原始错误: {_DEXHAND_IMPORT_ERROR}" if _DEXHAND_IMPORT_ERROR else ""
@@ -134,18 +189,19 @@ class DexHandManager:
                 adapter_index=spec.adapter_index,
             )
             hand.listen(enable=True)
-            hand.enable_realtime_response(device_id=spec.device_id, enable=True)
+            resolved_spec = replace(spec, device_id=self._resolve_device_id(hand, spec))
+            hand.enable_realtime_response(device_id=resolved_spec.device_id, enable=True)
 
-            hand.clear_error(spec.device_id)
+            hand.clear_error(resolved_spec.device_id)
             if self._config.gripper_set_safe_current:
                 max_current = int(self._config.gripper_safe_current)
                 for fid in self._config.gripper_finger_ids:
-                    hand.set_safe_current(spec.device_id, int(fid), max_current)
+                    hand.set_safe_current(resolved_spec.device_id, int(fid), max_current)
 
-            hand.reset_joints(spec.device_id)
+            hand.reset_joints(resolved_spec.device_id)
             time.sleep(float(self._config.gripper_post_reset_sleep))
-            self._hands[side] = hand
-            return hand, spec
+            self._hands[side] = (hand, resolved_spec)
+            return self._hands[side]
 
 
 _MANAGER: DexHandManager | None = None

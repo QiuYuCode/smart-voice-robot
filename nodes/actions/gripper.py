@@ -136,10 +136,11 @@ class DexHandManager:
             hand.listen(enable=True)
             hand.enable_realtime_response(device_id=spec.device_id, enable=True)
 
-            for finger_id in self._config.gripper_finger_ids:
-                hand.clear_error(spec.device_id, finger_id)
-                if self._config.gripper_set_safe_current:
-                    hand.set_safe_current(spec.device_id, finger_id, self._config.gripper_safe_current)
+            hand.clear_error(spec.device_id)
+            if self._config.gripper_set_safe_current:
+                max_current = int(self._config.gripper_safe_current)
+                for fid in self._config.gripper_finger_ids:
+                    hand.set_safe_current(spec.device_id, int(fid), max_current)
 
             hand.reset_joints(spec.device_id)
             time.sleep(float(self._config.gripper_post_reset_sleep))
@@ -200,9 +201,8 @@ def _move_all_fingers(
             time.sleep(inter_finger_delay)
 
 
-def _clear_finger_errors(hand: Any, device_id: int, finger_ids: list[int]) -> None:
-    for finger_id in finger_ids:
-        hand.clear_error(device_id, finger_id)
+def _clear_finger_errors(hand: Any, device_id: int, _finger_ids: list[int]) -> None:
+    hand.clear_error(device_id)
 
 
 def _read_pressure_text(hand: Any, spec: _HandSpec, finger_ids: list[int]) -> str:

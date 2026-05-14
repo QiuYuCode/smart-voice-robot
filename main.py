@@ -12,40 +12,42 @@
     Root (Sequence, memory=True)
     ├── WaitForWakeWord (KWS 软件唤醒)
     ├── WakeupResponse ("我在，请说")
-    └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
-        └── DialogLoop (Sequence, memory=False)
-            ├── ListenCommand (流式 ASR + VAD 静默超时)
-            ├── RecognizeIntent
-            ├── ActionSelector (Selector)
-            │   ├── DescribeLeftPalmAction (VLM + 左掌心相机)
-            │   ├── DescribeRightPalmAction (VLM + 右掌心相机)
-            │   ├── DescribeSceneAction (VLM + 默认相机=head)
-            │   ├── TakePhotoAction
-            │   ├── RecordVideoAction
-            │   ├── RobotArmAction
-            │   ├── NavigationAction (ROS 预留)
-            │   ├── LLMDialogAction (LangChain + Ollama)
-            │   ├── BackToWakeUp (intent==exit)
-            │   └── DefaultResponse
-            ├── SpeakResponse (阻塞式 TTS)
-            └── DialogContinueGuard (exit → FAILURE 终止循环)
+    └── DialogLoop (Sequence, memory=True)
+        ├── ListenCommand (流式 ASR + VAD 静默超时)
+        ├── RecognizeIntent
+        ├── ActionSelector (Selector)
+        │   ├── DescribeLeftPalmAction (VLM + 左掌心相机)
+        │   ├── DescribeRightPalmAction (VLM + 右掌心相机)
+        │   ├── DescribeSceneAction (VLM + 默认相机=head)
+        │   ├── TakePhotoAction
+        │   ├── RecordVideoAction
+        │   ├── RobotArmAction
+        │   ├── NavigationAction (ROS 预留)
+        │   ├── LLMDialogAction (LangChain + Ollama)
+        │   ├── BackToWakeUp (intent==exit)
+        │   └── DefaultResponse
+        ├── SpeakResponse (非阻塞式 TTS)
+        └── DialogContinueGuard (exit → FAILURE)
 
     LLM 规划器模式 (use_llm_planner=True, 支持多指令):
 
     Root (Sequence, memory=True)
     ├── WaitForWakeWord (KWS 软件唤醒)
     ├── WakeupResponse ("我在，请说")
-    └── DialogRepeat (SuccessIsRunning 装饰器, 实现无限循环)
-        └── DialogLoop (Sequence, memory=False)
-            ├── ListenCommand (流式 ASR + VAD 静默超时)
-            ├── LLMTaskPlanner (LLM Function Calling 解析多步指令)
-            ├── PlanExecutor (依次执行 action_plan)
-            ├── SpeakResponse (阻塞式 TTS)
-            └── DialogContinueGuard (exit → FAILURE 终止循环)
+    └── DialogLoop (Sequence, memory=True)
+        ├── ListenCommand (流式 ASR + VAD 静默超时)
+        ├── LLMTaskPlanner (LLM Function Calling 解析多步指令)
+        ├── PlanExecutor (依次执行 action_plan)
+        ├── SpeakResponse (非阻塞式 TTS)
+        └── DialogContinueGuard (exit → FAILURE)
 
-回到唤醒的两条路径:
+    当 config.continuous_dialog=True 时，DialogLoop 外层会包一层
+    SuccessIsRunning 装饰器，保留“唤醒一次后连续对话”的旧行为。
+
+回到唤醒的三条路径:
     1. VAD 静默超时: ListenCommand FAILURE → DialogLoop FAILURE → Root FAILURE
     2. 用户说"退出": DialogContinueGuard FAILURE → DialogLoop FAILURE → Root FAILURE
+    3. 回复播报完成: DialogLoop SUCCESS → Root SUCCESS
 
 用法:
     python main.py
@@ -157,13 +159,17 @@ def create_tree(
             DialogContinueGuard("ContinueGuard"),
         ])
 
-    # === 3. DialogRepeat: 无限循环对话 ===
-    # SuccessIsRunning 装饰器: 将 DialogLoop 的 SUCCESS 映射为 RUNNING，
-    # 使对话持续循环
-    dialog_repeat = py_trees.decorators.SuccessIsRunning(
-        name="DialogRepeat",
-        child=dialog_loop,
-    )
+    # === 3. Dialog 入口 ===
+    # 默认单轮对话：Speak 完成后 DialogLoop SUCCESS，Root 随即 SUCCESS，
+    # 主循环 stop(INVALID) 后回到 WakeWord。
+    dialog_entry = dialog_loop
+    if config.continuous_dialog:
+        # 可配置保留旧行为：将 DialogLoop 的 SUCCESS 映射为 RUNNING，
+        # 使唤醒后持续循环聆听，直到超时或退出指令。
+        dialog_entry = py_trees.decorators.SuccessIsRunning(
+            name="DialogRepeat",
+            child=dialog_loop,
+        )
 
     # === 4. Root: 完整流程 ===
     # memory=True: WakeWord SUCCESS 后记住状态，下一 tick 直接进入对话循环
@@ -175,7 +181,7 @@ def create_tree(
     root.add_children([
         wake_node,
         WakeupResponse("WakeupSound", engine, config),
-        dialog_repeat,
+        dialog_entry,
     ])
 
     return root
@@ -229,6 +235,8 @@ def main():
     logger.info(f"  LLM 模型: {config.llm_model}")
     mode_label = "LLM 多指令规划" if config.use_llm_planner else "关键词匹配"
     logger.info(f"  意图模式: {mode_label}")
+    loop_label = "连续对话" if config.continuous_dialog else "回复后回到唤醒"
+    logger.info(f"  对话模式: {loop_label}")
     logger.info(f"  对话超时: {config.dialog_timeout}s")
 
     if config.startup_sound_enabled:

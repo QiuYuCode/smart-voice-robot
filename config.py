@@ -144,6 +144,7 @@ class RobotConfig:
 
     # --- 对话 ---
     dialog_timeout: float = 15.0  # 秒，无活动后超时回到 idle
+    continuous_dialog: bool = False  # True 时回复后继续聆听；False 时回复后回到唤醒
     interrupt_min_speech_seconds: float = 0.6  # TTS 启动后延迟启用打断
 
     # --- 相机 ---

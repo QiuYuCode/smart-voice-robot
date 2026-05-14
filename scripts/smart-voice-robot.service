@@ -1,0 +1,39 @@
+# 安装（系统服务，开机自启）:
+#   sudo cp systemd/smart-voice-robot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now smart-voice-robot.service
+#
+# 控制:
+#   sudo systemctl status|start|stop|restart smart-voice-robot
+#
+# 安装前请按实际环境修改: User/Group、WorkingDirectory、.venv 路径。
+# 需先在项目目录执行: uv sync（或等价方式）生成 .venv。
+# 若需 API Key 等变量，可取消注释 EnvironmentFile 行并准备对应文件。
+# systemd 音频：在 [Service] 中设置 XDG_RUNTIME_DIR / PULSE_SERVER（见下），否则易直连 ALSA 与 16kHz TTS 冲突。
+# 开机等「网络已就绪」再启动：依赖 network-online.target（需系统启用
+# NetworkManager-wait-online 或 systemd-networkd-wait-online，多数桌面/服务器默认已有其一）。
+
+[Unit]
+Description=Smart Voice Robot（.venv Python）
+After=network-online.target sound.target
+Wants=network-online.target sound.target
+
+[Service]
+Type=simple
+User=nvidia
+Group=nvidia
+WorkingDirectory=/home/nvidia/WorkSpace/smart-voice-robot
+Environment=PATH=/home/nvidia/WorkSpace/smart-voice-robot/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+# 须与登录会话一致，PortAudio 才能用 pulse；UID 非 1000 时改路径。
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
+ExecStart=/home/nvidia/WorkSpace/smart-voice-robot/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SupplementaryGroups=audio video dialout
+EnvironmentFile=-/home/nvidia/WorkSpace/smart-voice-robot/.env
+
+[Install]
+WantedBy=multi-user.target

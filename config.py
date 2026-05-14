@@ -13,10 +13,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import load_dotenv
 from loguru import logger
 
 def _read_env(*keys: str) -> str:
     """按顺序读取环境变量，并做去空白/去包裹引号清洗。"""
+    load_dotenv()
     for key in keys:
         value = os.getenv(key)
         if value is None:

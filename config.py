@@ -339,6 +339,17 @@ class RobotConfig:
     ])
     robot_arm_enable_timeout: float = 10.0
 
+    # 掌心视觉前预置姿态：先回放示教 JSON（robot_arm_teach_file_template）中指定动作组再拍照+VLM
+    describe_left_palm_preset_group: str | None = None
+    describe_left_palm_preset_arm_side: str = "left"
+    describe_right_palm_preset_group: str | None = None
+    describe_right_palm_preset_arm_side: str = "right"
+    # 左/右掌心预置：False=后台回放开始后仅等待对应 capture_delay_s 即拍照；True=整段回放完再拍
+    describe_left_palm_preset_wait_replay_finish: bool = False
+    describe_left_palm_preset_capture_delay_s: float = 2.5
+    describe_right_palm_preset_wait_replay_finish: bool = False
+    describe_right_palm_preset_capture_delay_s: float = 2.5
+
     # --- TTS 响应模板 ---
     tts_responses: dict[str, str] = field(default_factory=lambda: {
         "wakeup": "我在，请说。",

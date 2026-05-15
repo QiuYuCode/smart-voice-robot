@@ -16,7 +16,7 @@
         ├── ListenCommand (流式 ASR + VAD 静默超时)
         ├── RecognizeIntent
         ├── ActionSelector (Selector)
-        │   ├── DescribeLeftPalmAction (VLM + 左掌心相机)
+        │   ├── DescribeLeftPalmAction (可选: 预置示教组 → VLM + 左掌心相机)
         │   ├── DescribeRightPalmAction (VLM + 右掌心相机)
         │   ├── DescribeSceneAction (VLM + 默认相机=head)
         │   ├── TakePhotoAction

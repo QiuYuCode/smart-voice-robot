@@ -39,10 +39,11 @@
                 <option value="iflytek_cloud">iflytek_cloud</option>
               </select>
             </ConfigField>
-            <ConfigField label="TTS 后端" hint="local=本地 / iflytek_cloud=讯飞云">
+            <ConfigField label="TTS 后端" hint="local / iflytek_cloud / mimo_cloud">
               <select v-model="form.tts_backend" class="cfg-select">
                 <option value="local">local</option>
                 <option value="iflytek_cloud">iflytek_cloud</option>
+                <option value="mimo_cloud">mimo_cloud</option>
               </select>
             </ConfigField>
             <ConfigField label="LLM 规划器" hint="启用后支持多步自然语言指令">

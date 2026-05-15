@@ -118,8 +118,19 @@ class RobotConfig:
     tts_max_chars_per_chunk: int = 80
     tts_sentence_pause: float = 0.40
     tts_clause_pause: float = 0.15
-    tts_backend: str = "iflytek_cloud"  # "local" | "iflytek_cloud"
+    tts_backend: str = "mimo_cloud"  # "local" | "iflytek_cloud" | "mimo_cloud"
     cloud_tts_fallback_to_local: bool = True
+
+    # --- 小米 MiMo 云 TTS (mimo-v2.5-tts, /v1/chat/completions) ---
+    mimo_tts_model: str = "mimo-v2.5-tts"
+    mimo_tts_voice: str = "苏打"
+    mimo_tts_style: str = (
+        "用成年男性、平稳、略带机械与金属质感的机器人播报口吻朗读，不要夸张情绪。"
+    )
+    mimo_tts_audio_format: str = "wav"
+    mimo_tts_base_url: str = ""
+    mimo_tts_api_key: str = ""
+    mimo_tts_timeout: float = 30.0
 
     # --- 讯飞云 TTS 配置 (/v2/tts) ---
     iflytek_tts_app_id: str = _read_env("XFYUN_TTS_APPID", "XFYUN_APPID")

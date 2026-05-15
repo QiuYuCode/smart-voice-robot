@@ -10,11 +10,15 @@
 import base64
 import hashlib
 import hmac
+import io
 import json
 import queue
 import time
+import wave
 from email.utils import formatdate
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 import numpy as np
 import sounddevice as sd
@@ -302,6 +306,141 @@ class VoiceEngine:
             chunks.append("".join(current_chars))
         return chunks
 
+    def _resolve_mimo_tts_credentials(self) -> tuple[str, str]:
+        """返回 (base_url, api_key)，空字段回退到 llm_* 配置。"""
+        cfg = self.config
+        api_key = (cfg.mimo_tts_api_key or cfg.llm_api_key).strip()
+        base_url = (cfg.mimo_tts_base_url or cfg.llm_base_url).strip().rstrip("/")
+        if not api_key:
+            raise RuntimeError("MiMo TTS API Key 缺失，请设置环境变量 LLM_API_KEY")
+        if not base_url:
+            raise RuntimeError("MiMo TTS base_url 未配置，请设置 llm_base_url 或 mimo_tts_base_url")
+        return base_url, api_key
+
+    @staticmethod
+    def _wav_bytes_to_float32(wav_bytes: bytes) -> tuple[np.ndarray, int]:
+        """将 WAV 字节解码为 float32 单声道样本。"""
+        if not wav_bytes:
+            return np.array([], dtype=np.float32), SAMPLE_RATE
+        with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
+            sample_rate = wf.getframerate()
+            n_channels = wf.getnchannels()
+            sample_width = wf.getsampwidth()
+            frames = wf.readframes(wf.getnframes())
+
+        if sample_width == 1:
+            pcm = np.frombuffer(frames, dtype=np.uint8).astype(np.float32)
+            pcm = (pcm - 128.0) / 128.0
+        elif sample_width == 2:
+            pcm = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+        elif sample_width == 4:
+            pcm = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
+        else:
+            raise RuntimeError(f"不支持的 WAV 采样宽度: {sample_width}")
+
+        if n_channels > 1:
+            pcm = pcm.reshape(-1, n_channels).mean(axis=1)
+        return pcm.astype(np.float32), sample_rate
+
+    def _request_mimo_tts_chunk(self, chunk_text: str) -> tuple[np.ndarray, int]:
+        """调用 MiMo TTS API 合成单段文本。"""
+        cfg = self.config
+        base_url, api_key = self._resolve_mimo_tts_credentials()
+        url = f"{base_url}/chat/completions"
+
+        messages: list[dict[str, str]] = []
+        style = (cfg.mimo_tts_style or "").strip()
+        if style:
+            messages.append({"role": "user", "content": style})
+        messages.append({"role": "assistant", "content": chunk_text})
+
+        payload = {
+            "model": cfg.mimo_tts_model,
+            "messages": messages,
+            "audio": {
+                "format": cfg.mimo_tts_audio_format,
+                "voice": cfg.mimo_tts_voice,
+            },
+        }
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = Request(
+            url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        logger.debug(
+            f"[TTS][MiMo] POST {url} model={cfg.mimo_tts_model} voice={cfg.mimo_tts_voice}"
+        )
+        try:
+            with urlopen(req, timeout=cfg.mimo_tts_timeout) as resp:
+                raw = resp.read()
+        except HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(
+                f"MiMo TTS HTTP {e.code}: {err_body or e.reason}"
+            ) from e
+        except URLError as e:
+            raise RuntimeError(f"MiMo TTS 网络错误: {e.reason}") from e
+
+        data = json.loads(raw.decode("utf-8"))
+        choices = data.get("choices") or []
+        if not choices:
+            raise RuntimeError(f"MiMo TTS 响应无 choices: {raw[:300]!r}")
+
+        message = choices[0].get("message") or {}
+        audio_obj = message.get("audio") or {}
+        audio_b64 = audio_obj.get("data") or ""
+        if not audio_b64:
+            raise RuntimeError(f"MiMo TTS 未返回音频: {raw[:300]!r}")
+
+        return self._wav_bytes_to_float32(base64.b64decode(audio_b64))
+
+    def _generate_mimo_tts(self, text: str) -> tuple[np.ndarray, int]:
+        """通过小米 MiMo v2.5 TTS 合成整段文本。"""
+        segments = self._split_tts_segments(text)
+        if not segments:
+            return np.array([], dtype=np.float32), SAMPLE_RATE
+
+        combined: list[np.ndarray] = []
+        sample_rate: int | None = None
+        sentence_pause: np.ndarray | None = None
+        clause_pause: np.ndarray | None = None
+
+        for seg_text, pause_type in segments:
+            samples, sr = self._request_mimo_tts_chunk(seg_text)
+            if len(samples) == 0:
+                continue
+            if sample_rate is None:
+                sample_rate = sr
+                sentence_pause = np.zeros(
+                    int(sr * self.config.tts_sentence_pause), dtype=np.float32
+                )
+                clause_pause = np.zeros(
+                    int(sr * self.config.tts_clause_pause), dtype=np.float32
+                )
+            elif sr != sample_rate:
+                logger.warning(
+                    f"[TTS][MiMo] 采样率不一致 {sr} vs {sample_rate}，以首段为准"
+                )
+
+            combined.append(samples)
+            if pause_type == "sentence" and sentence_pause is not None:
+                combined.append(sentence_pause)
+            elif pause_type == "clause" and clause_pause is not None:
+                combined.append(clause_pause)
+
+        if combined and sample_rate is not None:
+            out = np.concatenate(combined)
+            gain = self.config.tts_volume
+            if gain != 1.0:
+                out = np.clip(out * gain, -1.0, 1.0)
+            return out, sample_rate
+        raise RuntimeError("MiMo TTS 未返回有效音频")
+
     @staticmethod
     def _pcm16_bytes_to_float32(pcm_bytes: bytes) -> np.ndarray:
         if not pcm_bytes:
@@ -441,7 +580,15 @@ class VoiceEngine:
         if not segments:
             return np.array([], dtype=np.float32), SAMPLE_RATE
 
-        if self.config.tts_backend == "iflytek_cloud":
+        if self.config.tts_backend == "mimo_cloud":
+            try:
+                return self._generate_mimo_tts(text)
+            except Exception as e:
+                logger.error(f"[TTS][MiMo] 失败: {e}")
+                if not self.config.cloud_tts_fallback_to_local:
+                    raise
+                logger.warning("[TTS][MiMo] 回落到本地 TTS")
+        elif self.config.tts_backend == "iflytek_cloud":
             try:
                 return self._generate_iflytek_tts(text)
             except Exception as e:

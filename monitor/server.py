@@ -14,20 +14,19 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
-from config import save_config
+import yaml
+
+from config import (
+    CONFIG_YAML_PATH,
+    apply_config_updates,
+    reload_config_into,
+    save_config,
+)
+from monitor.config_schema import MONITOR_CONFIG_SECTIONS, MONITOR_EDITABLE_FIELDS
+from monitor.systemd_control import fetch_unit_journal, schedule_systemd_restart
 
 # Vue build 产物目录（与本文件同级的 dist/）
 _DIST_DIR = Path(__file__).parent / "dist"
-
-# 允许通过 API 读取/修改的配置字段白名单（不暴露 API Key 等敏感字段）
-_EDITABLE_FIELDS: frozenset[str] = frozenset({
-    "wake_mode", "asr_backend", "tts_backend", "use_llm_planner",
-    "llm_provider", "llm_model", "llm_base_url", "llm_request_timeout",
-    "llm_system_prompt", "llm_max_history",
-    "tts_speed", "tts_volume", "dialog_timeout",
-    "tick_interval", "log_level",
-    "startup_sound_enabled", "onnx_provider",
-})
 
 
 class MonitorServer:
@@ -97,39 +96,121 @@ class MonitorServer:
 
         app = FastAPI(title="Robot Monitor", docs_url=None, redoc_url=None, lifespan=lifespan)
 
+        def _maybe_restart_service(force: bool = False) -> dict:
+            """配置落盘后按需调度 systemctl restart。"""
+            cfg = self._config
+            if cfg is None:
+                return {"scheduled": False, "reason": "config not attached"}
+            if not force and not getattr(cfg, "monitor_restart_on_save", False):
+                return {"scheduled": False, "reason": "disabled"}
+            unit = getattr(cfg, "monitor_systemd_unit", "smart-voice-robot.service")
+            use_sudo = bool(getattr(cfg, "monitor_systemctl_use_sudo", True))
+            schedule_systemd_restart(unit, use_sudo=use_sudo)
+            return {"scheduled": True, "unit": unit, "use_sudo": use_sudo}
+
         # ── Config REST API ──────────────────────────────────────────
+
+        @app.get("/api/config/meta")
+        async def get_config_meta():
+            return {
+                "yaml_path": str(CONFIG_YAML_PATH),
+                "editable_fields": sorted(MONITOR_EDITABLE_FIELDS),
+                "sections": MONITOR_CONFIG_SECTIONS,
+            }
 
         @app.get("/api/config")
         async def get_config():
             if self._config is None:
                 return JSONResponse({"error": "config not attached"}, status_code=503)
             raw = dataclasses.asdict(self._config)
-            return {k: v for k, v in raw.items() if k in _EDITABLE_FIELDS}
+            return {k: v for k, v in raw.items() if k in MONITOR_EDITABLE_FIELDS}
 
         @app.patch("/api/config")
-        async def patch_config(request: Request):
+        async def patch_config(request: Request, restart: bool | None = None):
             if self._config is None:
                 return JSONResponse({"error": "config not attached"}, status_code=503)
-            updates: dict = await request.json()
-            applied: dict = {}
-            rejected: list[str] = []
-            for key, value in updates.items():
-                if key not in _EDITABLE_FIELDS:
-                    rejected.append(key)
-                    continue
-                try:
-                    setattr(self._config, key, value)
-                    applied[key] = value
-                except Exception as exc:
-                    logger.warning(f"[Monitor] 配置更新失败 {key!r}: {exc}")
-                    rejected.append(key)
+            body: dict = await request.json()
+            do_restart = restart
+            if do_restart is None:
+                do_restart = bool(body.pop("_restart", False))
+            updates = {k: v for k, v in body.items() if k != "_restart"}
+            applied, rejected = apply_config_updates(self._config, updates)
+            restart_info = {"scheduled": False}
             if applied:
                 logger.info(f"[Monitor] 配置已更新: {list(applied.keys())}")
                 try:
                     save_config(self._config)
+                    restart_info = _maybe_restart_service(force=bool(do_restart))
                 except Exception as exc:
                     logger.warning(f"[Monitor] 配置持久化失败: {exc}")
-            return {"applied": applied, "rejected": rejected}
+            return {
+                "applied": applied,
+                "rejected": rejected,
+                "yaml_path": str(CONFIG_YAML_PATH),
+                "restart": restart_info,
+            }
+
+        @app.post("/api/service/restart")
+        async def restart_service():
+            if self._config is None:
+                return JSONResponse({"error": "config not attached"}, status_code=503)
+            info = _maybe_restart_service(force=True)
+            return {"ok": info.get("scheduled", False), "restart": info}
+
+        @app.get("/api/service/logs")
+        async def get_service_logs(lines: int = 200, since: str | None = None):
+            if self._config is None:
+                return JSONResponse({"error": "config not attached"}, status_code=503)
+            unit = getattr(self._config, "monitor_systemd_unit", "smart-voice-robot.service")
+            use_sudo = bool(getattr(self._config, "monitor_systemctl_use_sudo", True))
+            ok, text, err = fetch_unit_journal(
+                unit, lines=lines, since=since, use_sudo=use_sudo
+            )
+            if not ok:
+                return JSONResponse(
+                    {"ok": False, "unit": unit, "error": err},
+                    status_code=500,
+                )
+            return {
+                "ok": True,
+                "unit": unit,
+                "lines": lines,
+                "since": since,
+                "text": text,
+            }
+
+        @app.get("/api/config/yaml")
+        async def get_config_yaml():
+            if not CONFIG_YAML_PATH.exists():
+                return {"content": "", "path": str(CONFIG_YAML_PATH), "exists": False}
+            return {
+                "content": CONFIG_YAML_PATH.read_text(encoding="utf-8"),
+                "path": str(CONFIG_YAML_PATH),
+                "exists": True,
+            }
+
+        @app.put("/api/config/yaml")
+        async def put_config_yaml(request: Request):
+            if self._config is None:
+                return JSONResponse({"error": "config not attached"}, status_code=503)
+            body: dict = await request.json()
+            content = body.get("content", "")
+            if not isinstance(content, str):
+                return JSONResponse({"error": "content 必须是字符串"}, status_code=400)
+            try:
+                parsed = yaml.safe_load(content)
+            except yaml.YAMLError as exc:
+                return JSONResponse({"error": f"YAML 解析失败: {exc}"}, status_code=400)
+            if parsed is not None and not isinstance(parsed, dict):
+                return JSONResponse({"error": "YAML 根节点必须是 mapping"}, status_code=400)
+            do_restart = bool(body.get("restart", False))
+            CONFIG_YAML_PATH.write_text(content, encoding="utf-8")
+            reload_config_into(self._config, CONFIG_YAML_PATH)
+            logger.info(f"[Monitor] 已从 YAML 重载配置: {CONFIG_YAML_PATH}")
+            restart_info = _maybe_restart_service(
+                force=do_restart or bool(getattr(self._config, "monitor_restart_on_save", False))
+            )
+            return {"ok": True, "path": str(CONFIG_YAML_PATH), "restart": restart_info}
 
         # ── WebSocket ────────────────────────────────────────────────
 
@@ -189,9 +270,14 @@ class MonitorServer:
             if assets_dir.exists():
                 app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-            # SPA 兜底：所有未匹配路由返回 index.html
+            # SPA 兜底（勿把 /api/* 当成前端路由，否则返回 HTML 导致 JSON 解析失败）
             @app.get("/{full_path:path}")
             async def spa_fallback(full_path: str):
+                if full_path == "api" or full_path.startswith("api/"):
+                    return JSONResponse(
+                        {"error": "API 不存在", "path": f"/{full_path}"},
+                        status_code=404,
+                    )
                 return FileResponse(_DIST_DIR / "index.html")
         else:
             logger.warning(

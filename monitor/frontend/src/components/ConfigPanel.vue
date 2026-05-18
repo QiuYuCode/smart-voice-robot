@@ -7,143 +7,129 @@
     <div v-else-if="loadError" class="state-box error">
       <span class="state-icon">✕</span>
       <span>{{ loadError }}</span>
-      <button class="btn-retry" @click="loadConfig">重试</button>
+      <button class="btn-retry" @click="loadAll">重试</button>
     </div>
     <template v-else>
-      <!-- 保存状态提示 -->
       <Transition name="toast">
         <div v-if="toast.show" class="toast" :class="toast.type">
           {{ toast.message }}
         </div>
       </Transition>
 
-      <div class="config-sections">
-        <!-- 基础模式 -->
-        <section class="cfg-section">
+      <div class="config-toolbar">
+        <div class="mode-tabs">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: mode === 'form' }"
+            @click="mode = 'form'"
+          >表单</button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: mode === 'yaml' }"
+            @click="switchToYaml"
+          >YAML</button>
+        </div>
+        <span class="yaml-path" :title="yamlPath">{{ shortPath(yamlPath) }}</span>
+      </div>
+
+      <!-- 表单模式 -->
+      <div v-show="mode === 'form'" class="config-sections">
+        <section
+          v-for="sec in sections"
+          :key="sec.id"
+          class="cfg-section"
+        >
           <div class="cfg-section-title">
-            <span class="cfg-section-icon">⬡</span> 基础模式
+            <span class="cfg-section-icon">{{ sec.icon }}</span>
+            {{ sec.title }}
           </div>
           <div class="cfg-grid">
-            <ConfigField
-              label="唤醒模式"
-              hint="software=软件KWS / hardware=硬件唤醒板"
+            <div
+              v-for="field in sec.fields"
+              :key="field.key"
+              class="cfg-field"
+              :class="{ 'cfg-field-full': isFullWidth(field) }"
             >
-              <select v-model="form.wake_mode" class="cfg-select">
-                <option value="software">software</option>
-                <option value="hardware">hardware</option>
+              <label class="cfg-label">
+                {{ field.label }}
+                <span v-if="field.hint" class="cfg-hint">{{ field.hint }}</span>
+              </label>
+
+              <select
+                v-if="field.type === 'select'"
+                v-model="form[field.key]"
+                class="cfg-select"
+              >
+                <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
               </select>
-            </ConfigField>
-            <ConfigField label="ASR 后端" hint="local=本地 / iflytek_cloud=讯飞云">
-              <select v-model="form.asr_backend" class="cfg-select">
-                <option value="local">local</option>
-                <option value="iflytek_cloud">iflytek_cloud</option>
-              </select>
-            </ConfigField>
-            <ConfigField label="TTS 后端" hint="local / iflytek_cloud / mimo_cloud">
-              <select v-model="form.tts_backend" class="cfg-select">
-                <option value="local">local</option>
-                <option value="iflytek_cloud">iflytek_cloud</option>
-                <option value="mimo_cloud">mimo_cloud</option>
-              </select>
-            </ConfigField>
-            <ConfigField label="LLM 规划器" hint="启用后支持多步自然语言指令">
-              <label class="toggle">
-                <input type="checkbox" v-model="form.use_llm_planner" />
+
+              <label v-else-if="field.type === 'boolean'" class="toggle">
+                <input type="checkbox" v-model="form[field.key]" />
                 <span class="toggle-track" />
               </label>
-            </ConfigField>
-          </div>
-        </section>
 
-        <!-- LLM 设置 -->
-        <section class="cfg-section">
-          <div class="cfg-section-title">
-            <span class="cfg-section-icon">◈</span> LLM 设置
-          </div>
-          <div class="cfg-grid">
-            <ConfigField label="LLM 提供商" hint="ollama / openai / deepseek / anthropic">
-              <select v-model="form.llm_provider" class="cfg-select">
-                <option value="ollama">ollama</option>
-                <option value="openai">openai</option>
-                <option value="deepseek">deepseek</option>
-                <option value="anthropic">anthropic</option>
-              </select>
-            </ConfigField>
-            <ConfigField label="LLM 模型">
-              <input v-model="form.llm_model" class="cfg-input" placeholder="qwen2.5:0.5b" />
-            </ConfigField>
-            <ConfigField label="Base URL" hint="Ollama 地址，在线模型留空">
-              <input v-model="form.llm_base_url" class="cfg-input" placeholder="http://localhost:11434" />
-            </ConfigField>
-            <ConfigField label="请求超时 (秒)">
-              <input v-model.number="form.llm_request_timeout" class="cfg-input" type="number" min="1" max="60" step="0.5" />
-            </ConfigField>
-          </div>
-          <ConfigField label="系统提示词" full>
-            <textarea v-model="form.llm_system_prompt" class="cfg-textarea" rows="4" />
-          </ConfigField>
-        </section>
+              <textarea
+                v-else-if="field.type === 'textarea' || field.type === 'json'"
+                v-model="form[field.key]"
+                class="cfg-textarea"
+                :rows="field.rows || (field.type === 'json' ? 6 : 4)"
+                :spellcheck="field.type !== 'json'"
+              />
 
-        <!-- 音频 & 对话 -->
-        <section class="cfg-section">
-          <div class="cfg-section-title">
-            <span class="cfg-section-icon">◎</span> 音频 & 对话
-          </div>
-          <div class="cfg-grid">
-            <ConfigField label="TTS 语速" hint="1.0=正常，1.2=稍快">
-              <input v-model.number="form.tts_speed" class="cfg-input" type="number" min="0.5" max="2.0" step="0.1" />
-            </ConfigField>
-            <ConfigField label="TTS 音量" hint="1.0=原始音量">
-              <input v-model.number="form.tts_volume" class="cfg-input" type="number" min="0.1" max="3.0" step="0.1" />
-            </ConfigField>
-            <ConfigField label="对话超时 (秒)" hint="无活动后回到待机">
-              <input v-model.number="form.dialog_timeout" class="cfg-input" type="number" min="5" max="60" step="1" />
-            </ConfigField>
-            <ConfigField label="最大对话历史轮">
-              <input v-model.number="form.llm_max_history" class="cfg-input" type="number" min="2" max="30" step="1" />
-            </ConfigField>
-          </div>
-        </section>
+              <input
+                v-else-if="field.type === 'number'"
+                v-model.number="form[field.key]"
+                class="cfg-input"
+                type="number"
+                :min="field.min"
+                :max="field.max"
+                :step="field.step ?? 1"
+              />
 
-        <!-- 系统 -->
-        <section class="cfg-section">
-          <div class="cfg-section-title">
-            <span class="cfg-section-icon">⚙</span> 系统
-          </div>
-          <div class="cfg-grid">
-            <ConfigField label="Tick 间隔 (秒)" hint="主循环心跳">
-              <input v-model.number="form.tick_interval" class="cfg-input" type="number" min="0.01" max="0.5" step="0.01" />
-            </ConfigField>
-            <ConfigField label="日志级别">
-              <select v-model="form.log_level" class="cfg-select">
-                <option>DEBUG</option>
-                <option>INFO</option>
-                <option>WARNING</option>
-                <option>ERROR</option>
-              </select>
-            </ConfigField>
-            <ConfigField label="启动提示音">
-              <label class="toggle">
-                <input type="checkbox" v-model="form.startup_sound_enabled" />
-                <span class="toggle-track" />
-              </label>
-            </ConfigField>
-            <ConfigField label="推理设备">
-              <select v-model="form.onnx_provider" class="cfg-select">
-                <option value="cpu">cpu</option>
-                <option value="cuda">cuda</option>
-              </select>
-            </ConfigField>
+              <input
+                v-else
+                v-model="form[field.key]"
+                class="cfg-input"
+                type="text"
+              />
+            </div>
           </div>
         </section>
       </div>
 
-      <!-- 操作按钮 -->
+      <!-- YAML 模式 -->
+      <div v-show="mode === 'yaml'" class="yaml-editor-wrap">
+        <textarea
+          v-model="yamlContent"
+          class="yaml-editor"
+          spellcheck="false"
+          placeholder="# config.yaml"
+        />
+      </div>
+
       <div class="config-actions">
-        <button class="btn-reset" @click="loadConfig">重置</button>
-        <button class="btn-save" :disabled="saving" @click="saveConfig">
+        <button type="button" class="btn-reset" @click="mode === 'form' ? loadAll() : loadYaml()">
+          重置
+        </button>
+        <button
+          type="button"
+          class="btn-restart-only"
+          :disabled="saving"
+          title="不保存，仅 systemctl restart"
+          @click="restartServiceOnly"
+        >
+          重启服务
+        </button>
+        <button
+          type="button"
+          class="btn-save"
+          :disabled="saving"
+          @click="mode === 'form' ? saveForm() : saveYaml()"
+        >
           <span v-if="saving" class="btn-spinner" />
-          {{ saving ? '保存中...' : '应用配置' }}
+          {{ saving ? '保存中...' : '保存并生效' }}
         </button>
       </div>
     </template>
@@ -152,60 +138,156 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import fallbackSections from '../configFormSchema.json'
 
-// 内联 ConfigField 子组件
-const ConfigField = {
-  props: {
-    label: String,
-    hint: String,
-    full: Boolean,
-  },
-  template: `
-    <div class="cfg-field" :class="{ 'cfg-field-full': full }">
-      <label class="cfg-label">
-        {{ label }}
-        <span v-if="hint" class="cfg-hint">{{ hint }}</span>
-      </label>
-      <slot />
-    </div>
-  `,
-}
+const API_HINT = '请通过 main.py 启动监控（默认 :8765），并重启进程以加载最新 API；开发模式需同时运行 main.py。'
 
-// ---- 状态 ----
+const mode = ref('form')
 const loading = ref(false)
 const loadError = ref('')
 const saving = ref(false)
+const yamlPath = ref('config.yaml')
+const yamlContent = ref('')
+const sections = ref([])
+const fieldMeta = ref({})
+
 const form = reactive({})
 
 const toast = reactive({ show: false, message: '', type: 'success' })
 
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', duration = 2800) {
   toast.message = message
   toast.type = type
   toast.show = true
-  setTimeout(() => { toast.show = false }, 2500)
+  setTimeout(() => { toast.show = false }, duration)
 }
 
-// 可编辑字段白名单（不暴露 API key）
-const EDITABLE_FIELDS = [
-  'wake_mode', 'asr_backend', 'tts_backend', 'use_llm_planner',
-  'llm_provider', 'llm_model', 'llm_base_url', 'llm_request_timeout',
-  'llm_system_prompt', 'llm_max_history',
-  'tts_speed', 'tts_volume', 'dialog_timeout',
-  'tick_interval', 'log_level',
-  'startup_sound_enabled', 'onnx_provider',
-]
+function restartToastMessage(restart) {
+  if (!restart?.scheduled) return ''
+  const unit = restart.unit || 'smart-voice-robot.service'
+  return `，约 1 秒后重启 ${unit}`
+}
 
-async function loadConfig() {
+function shortPath(p) {
+  if (!p) return 'config.yaml'
+  const parts = p.split(/[/\\]/)
+  return parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : p
+}
+
+function isFullWidth(field) {
+  return field.type === 'textarea' || field.type === 'json'
+    || ['llm_system_prompt', 'planner_system_prompt', 'vlm_system_prompt', 'mimo_tts_style'].includes(field.key)
+}
+
+function fillFormFromData(data) {
+  for (const [key, meta] of Object.entries(fieldMeta.value)) {
+    const raw = data[key]
+    if (meta.type === 'json') {
+      form[key] = raw === undefined ? '' : JSON.stringify(raw, null, 2)
+    } else if (meta.type === 'boolean') {
+      form[key] = Boolean(raw)
+    } else {
+      form[key] = raw ?? ''
+    }
+  }
+}
+
+function buildPayload() {
+  const payload = {}
+  for (const [key, meta] of Object.entries(fieldMeta.value)) {
+    if (!(key in form)) continue
+    let val = form[key]
+    if (meta.type === 'json') {
+      if (typeof val === 'string') {
+        const trimmed = val.trim()
+        if (!trimmed) {
+          payload[key] = meta.emptyValue ?? {}
+          continue
+        }
+        try {
+          val = JSON.parse(trimmed)
+        } catch (e) {
+          throw new Error(`${meta.label || key} JSON 无效: ${e.message}`)
+        }
+      }
+    }
+    payload[key] = val
+  }
+  return payload
+}
+
+async function fetchJson(url, options) {
+  const res = await fetch(url, options)
+  const text = await res.text()
+  const ct = (res.headers.get('content-type') || '').toLowerCase()
+  const trimmed = text.trimStart()
+  if (!ct.includes('json') && (trimmed.startsWith('<!') || trimmed.startsWith('<html'))) {
+    throw new Error(`接口返回了 HTML 而非 JSON。${API_HINT}`)
+  }
+  let data
+  try {
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error(`JSON 解析失败 (HTTP ${res.status})。${API_HINT}`)
+  }
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`)
+  }
+  return data
+}
+
+function applySections(secList) {
+  sections.value = secList
+  const map = {}
+  for (const sec of secList) {
+    for (const f of sec.fields || []) {
+      map[f.key] = f
+    }
+  }
+  fieldMeta.value = map
+}
+
+async function loadMeta() {
+  try {
+    const meta = await fetchJson('/api/config/meta')
+    yamlPath.value = meta.yaml_path || 'config.yaml'
+    applySections(meta.sections || [])
+  } catch (e) {
+    // 旧版监控服务无 /api/config/meta 时，使用内置表单结构
+    if (String(e.message).includes('404') || String(e.message).includes('API 不存在')) {
+      applySections(fallbackSections)
+      return
+    }
+    throw e
+  }
+}
+
+async function loadConfigValues() {
+  const data = await fetchJson('/api/config')
+  if (data.error) throw new Error(data.error)
+  fillFormFromData(data)
+}
+
+async function loadYaml() {
+  try {
+    const data = await fetchJson('/api/config/yaml')
+    yamlPath.value = data.path || yamlPath.value
+    yamlContent.value = data.content ?? ''
+  } catch (e) {
+    if (String(e.message).includes('404') || String(e.message).includes('API 不存在')) {
+      yamlContent.value = '# 当前监控服务版本不支持 YAML 直编，请重启 main.py 后重试\n'
+      return
+    }
+    throw e
+  }
+}
+
+async function loadAll() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await fetch('/api/config')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    EDITABLE_FIELDS.forEach(key => {
-      if (key in data) form[key] = data[key]
-    })
+    await loadMeta()
+    await Promise.all([loadConfigValues(), loadYaml()])
   } catch (e) {
     loadError.value = `配置加载失败：${e.message}`
   } finally {
@@ -213,28 +295,81 @@ async function loadConfig() {
   }
 }
 
-async function saveConfig() {
+async function switchToYaml() {
+  mode.value = 'yaml'
+  try {
+    await loadYaml()
+  } catch (e) {
+    showToast(`YAML 加载失败：${e.message}`, 'error')
+  }
+}
+
+async function saveForm() {
   saving.value = true
   try {
-    const payload = {}
-    EDITABLE_FIELDS.forEach(key => {
-      if (key in form) payload[key] = form[key]
-    })
-    const res = await fetch('/api/config', {
+    const payload = buildPayload()
+    const data = await fetchJson('/api/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    showToast('配置已应用（重启生效部分设置）', 'success')
+    const n = Object.keys(data.applied || {}).length
+    const rej = (data.rejected || []).length
+    if (rej > 0) {
+      showToast(`已保存 ${n} 项，${rej} 项被拒绝`, 'error')
+    } else {
+      showToast(
+        `已写入 config.yaml（${n} 项）${restartToastMessage(data.restart)}`,
+        'success',
+        data.restart?.scheduled ? 5000 : 2800,
+      )
+    }
+    await loadYaml()
   } catch (e) {
-    showToast(`保存失败：${e.message}`, 'error')
+    showToast(e.message || '保存失败', 'error')
   } finally {
     saving.value = false
   }
 }
 
-onMounted(loadConfig)
+async function restartServiceOnly() {
+  saving.value = true
+  try {
+    const data = await fetchJson('/api/service/restart', { method: 'POST' })
+    if (data.restart?.scheduled) {
+      showToast(`正在重启 ${data.restart.unit || 'smart-voice-robot.service'}…`, 'success', 5000)
+    } else {
+      showToast(data.restart?.reason || '未调度重启', 'error')
+    }
+  } catch (e) {
+    showToast(e.message || '重启失败', 'error')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function saveYaml() {
+  saving.value = true
+  try {
+    const data = await fetchJson('/api/config/yaml', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: yamlContent.value, restart: true }),
+    })
+    showToast(
+      `YAML 已保存${restartToastMessage(data.restart)}`,
+      'success',
+      data.restart?.scheduled ? 5000 : 2800,
+    )
+    await loadConfigValues()
+  } catch (e) {
+    showToast(e.message || 'YAML 保存失败', 'error')
+  } finally {
+    saving.value = false
+  }
+}
+
+onMounted(loadAll)
 </script>
 
 <style scoped>
@@ -246,7 +381,6 @@ onMounted(loadConfig)
   position: relative;
 }
 
-/* ---- 状态 ---- */
 .state-box {
   display: flex;
   flex-direction: column;
@@ -262,7 +396,8 @@ onMounted(loadConfig)
 .state-icon { font-size: 20px; }
 
 .spinner {
-  width: 24px; height: 24px;
+  width: 24px;
+  height: 24px;
   border: 2px solid var(--border);
   border-top-color: var(--cyan);
   border-radius: 50%;
@@ -280,23 +415,64 @@ onMounted(loadConfig)
   color: #ff4066;
   font-size: 11px;
   cursor: pointer;
-  transition: background 0.15s;
 }
 
-.btn-retry:hover { background: rgba(255, 64, 102, 0.1); }
+.config-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
-/* ---- Toast ---- */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: rgba(0, 200, 255, 0.15);
+  color: var(--cyan);
+}
+
+.yaml-path {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toast {
   position: absolute;
-  top: 8px;
+  top: 44px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 6px 16px;
+  padding: 6px 14px;
   border-radius: 20px;
   font-size: 11px;
   font-weight: 600;
   z-index: 100;
-  white-space: nowrap;
+  max-width: 90%;
+  text-align: center;
   pointer-events: none;
 }
 
@@ -315,21 +491,44 @@ onMounted(loadConfig)
 .toast-enter-active, .toast-leave-active { transition: opacity 0.2s, transform 0.2s; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(-6px); }
 
-/* ---- Sections ---- */
 .config-sections {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 12px 0;
+  padding: 4px 12px 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
-.cfg-section {
+.yaml-editor-wrap {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 12px 0;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
+
+.yaml-editor {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #060b12;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 10px;
+  outline: none;
+  tab-size: 2;
+}
+
+.yaml-editor:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.1);
+}
+
+.cfg-section { display: flex; flex-direction: column; gap: 8px; }
 
 .cfg-section-title {
   font-size: 10px;
@@ -344,8 +543,6 @@ onMounted(loadConfig)
   border-bottom: 1px solid var(--border);
 }
 
-.cfg-section-icon { font-size: 12px; opacity: 0.8; }
-
 .cfg-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -358,9 +555,7 @@ onMounted(loadConfig)
   gap: 4px;
 }
 
-.cfg-field-full {
-  grid-column: 1 / -1;
-}
+.cfg-field-full { grid-column: 1 / -1; }
 
 .cfg-label {
   font-size: 10px;
@@ -375,7 +570,6 @@ onMounted(loadConfig)
 
 .cfg-hint {
   font-size: 9px;
-  color: var(--border-active, #2a4a60);
   text-transform: none;
   letter-spacing: 0;
   font-weight: 400;
@@ -394,11 +588,11 @@ onMounted(loadConfig)
   font-size: 11px;
   font-family: var(--font-mono);
   outline: none;
-  transition: border-color 0.15s;
 }
 
 .cfg-input:focus,
-.cfg-select:focus {
+.cfg-select:focus,
+.cfg-textarea:focus {
   border-color: var(--cyan);
   box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.1);
 }
@@ -423,16 +617,9 @@ onMounted(loadConfig)
   font-family: var(--font-mono);
   resize: vertical;
   outline: none;
-  line-height: 1.5;
-  transition: border-color 0.15s;
+  line-height: 1.45;
 }
 
-.cfg-textarea:focus {
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.1);
-}
-
-/* ---- Toggle ---- */
 .toggle {
   display: inline-flex;
   align-items: center;
@@ -472,31 +659,40 @@ onMounted(loadConfig)
   background: var(--cyan);
 }
 
-/* ---- Actions ---- */
 .config-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   padding: 10px 12px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.btn-reset {
+.btn-restart-only {
   flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--amber, #ffa726);
+  background: rgba(255, 167, 38, 0.08);
+  color: #ffa726;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-restart-only:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-reset {
   padding: 7px 14px;
   border-radius: 7px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
   font-size: 12px;
-  font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.btn-reset:hover {
-  border-color: var(--text-dim);
-  color: var(--text);
 }
 
 .btn-save {
@@ -509,21 +705,13 @@ onMounted(loadConfig)
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
 }
 
-.btn-save:hover:not(:disabled) {
-  background: rgba(0, 200, 255, 0.22);
-}
-
-.btn-save:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-spinner {
   width: 12px;

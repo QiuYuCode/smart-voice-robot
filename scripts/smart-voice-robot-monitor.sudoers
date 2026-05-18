@@ -1,0 +1,9 @@
+# 允许运行 smart-voice-robot 的用户在监控面板保存配置后无密码重启服务：
+#   sudo cp scripts/smart-voice-robot-monitor.sudoers /etc/sudoers.d/smart-voice-robot-monitor
+#   sudo chmod 440 /etc/sudoers.d/smart-voice-robot-monitor
+#   sudo visudo -c
+#
+# 将 nvidia 改为实际运行 systemd 单元的 User。
+
+nvidia ALL=(ALL) NOPASSWD: /bin/systemctl restart smart-voice-robot.service, /usr/bin/systemctl restart smart-voice-robot.service
+nvidia ALL=(ALL) NOPASSWD: /bin/journalctl, /usr/bin/journalctl

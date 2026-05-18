@@ -405,6 +405,9 @@ class RobotConfig:
     # --- 监控后台 ---
     enable_monitor: bool = True   # 是否启用 Web 监控面板
     monitor_port: int = 8765        # 监控面板端口
+    monitor_restart_on_save: bool = True  # 监控面板保存配置后是否 systemctl restart
+    monitor_systemd_unit: str = "smart-voice-robot.service"
+    monitor_systemctl_use_sudo: bool = True  # restart 是否使用 sudo -n（见 scripts/sudoers 示例）
 
 
 # YAML 配置文件路径
@@ -518,19 +521,7 @@ def load_config(path: Path | str | None = None) -> RobotConfig:
             if not hasattr(cfg, key):
                 logger.warning(f"[config] 忽略未知配置项: {key!r}")
                 continue
-            if key == "cameras" and isinstance(value, dict):
-                # 与默认字典合并，YAML 只需覆盖需要的相机/字段
-                merged = {cid: dict(spec) for cid, spec in cfg.cameras.items()}
-                for cid, spec in value.items():
-                    if not isinstance(spec, dict):
-                        logger.warning(f"[config] cameras.{cid} 应为 dict，忽略: {spec!r}")
-                        continue
-                    merged.setdefault(cid, {}).update(spec)
-                value = merged
-            if key == "robot_arm_keyword_actions":
-                value = _normalize_robot_arm_keyword_actions(value)
-            if key in _PATH_FIELDS and isinstance(value, str) and not Path(value).is_absolute():
-                value = str(base_dir / value)
+            value = _prepare_config_value(key, value, cfg)
             setattr(cfg, key, value)
 
         if legacy_head_overrides:
@@ -553,6 +544,59 @@ def load_config(path: Path | str | None = None) -> RobotConfig:
     cfg.vlm_api_key = _read_env("VLM_API_KEY", "LLM_API_KEY")
 
     return cfg
+
+
+def _prepare_config_value(key: str, value: Any, cfg: RobotConfig) -> Any:
+    """将 YAML/JSON 中的值转换为 RobotConfig 字段类型（与 load_config 一致）。"""
+    if key == "cameras" and isinstance(value, dict):
+        merged = {cid: dict(spec) for cid, spec in cfg.cameras.items()}
+        for cid, spec in value.items():
+            if not isinstance(spec, dict):
+                logger.warning(f"[config] cameras.{cid} 应为 dict，忽略: {spec!r}")
+                continue
+            merged.setdefault(cid, {}).update(spec)
+        return merged
+    if key == "robot_arm_keyword_actions":
+        return _normalize_robot_arm_keyword_actions(value)
+    if key in _PATH_FIELDS and isinstance(value, str) and not Path(value).is_absolute():
+        return str(base_dir / value)
+    return value
+
+
+def apply_config_updates(
+    cfg: RobotConfig, updates: dict[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
+    """将部分字段写入运行中配置（监控面板 PATCH 使用）。
+
+    Returns:
+        (applied, rejected) 已应用字段与被拒绝的字段名列表。
+    """
+    from monitor.config_schema import MONITOR_EDITABLE_FIELDS
+
+    applied: dict[str, Any] = {}
+    rejected: list[str] = []
+    for key, value in updates.items():
+        if key not in MONITOR_EDITABLE_FIELDS:
+            rejected.append(key)
+            continue
+        if not hasattr(cfg, key):
+            rejected.append(key)
+            continue
+        try:
+            prepared = _prepare_config_value(key, value, cfg)
+            setattr(cfg, key, prepared)
+            applied[key] = prepared
+        except Exception as exc:
+            logger.warning(f"[config] 更新 {key!r} 失败: {exc}")
+            rejected.append(key)
+    return applied, rejected
+
+
+def reload_config_into(target: RobotConfig, path: Path | str | None = None) -> None:
+    """从 YAML 重新加载并覆盖 target 的全部字段（保留同一对象引用）。"""
+    fresh = load_config(path)
+    for f in dataclasses.fields(RobotConfig):
+        setattr(target, f.name, getattr(fresh, f.name))
 
 
 def save_config(config: RobotConfig, path: Path | str | None = None) -> None:

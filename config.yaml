@@ -293,3 +293,6 @@ log_level: DEBUG
 # --- 监控后台 ---
 enable_monitor: true
 monitor_port: 8765
+monitor_restart_on_save: true
+monitor_systemd_unit: smart-voice-robot.service
+monitor_systemctl_use_sudo: true

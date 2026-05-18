@@ -36,8 +36,7 @@
     </header>
 
     <!-- ── Main ── -->
-    <div class="main">
-      <!-- 左侧：行为树 -->
+    <div class="main" :class="[`sidebar-${sidebarSide}`, { 'is-resizing': isResizing }]">
       <section class="tree-section">
         <div class="section-bar">
           <span class="section-title">行为树</span>
@@ -48,9 +47,26 @@
         </div>
       </section>
 
-      <!-- 右侧：侧边面板 -->
-      <aside class="sidebar">
-        <!-- Tab 导航 -->
+      <aside
+        class="sidebar"
+        :style="{ width: `${sidebarWidth}px`, minWidth: `${sidebarWidth}px` }"
+      >
+        <div
+          class="sidebar-resizer"
+          title="拖动调整侧边栏宽度"
+          @mousedown.prevent="startResize"
+        />
+        <div class="sidebar-toolbar">
+          <button
+            type="button"
+            class="layout-btn"
+            :title="sidebarSide === 'right' ? '移到左侧' : '移到右侧'"
+            @click="toggleSidebarSide"
+          >
+            {{ sidebarSide === 'right' ? '◧ 靠左' : '◨ 靠右' }}
+          </button>
+          <span class="sidebar-size">{{ sidebarWidth }}px</span>
+        </div>
         <div class="tabs">
           <button
             v-for="tab in TAB_LIST"
@@ -85,6 +101,10 @@
               v-else-if="activeTab === 'config'"
               :key="'config'"
             />
+            <ServiceLogPanel
+              v-else-if="activeTab === 'logs'"
+              :key="'logs'"
+            />
           </Transition>
         </div>
       </aside>
@@ -93,21 +113,78 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useWebSocket } from './composables/useWebSocket.js'
 import TreeCanvas from './components/TreeCanvas.vue'
 import BlackboardPanel from './components/BlackboardPanel.vue'
 import ConversationPanel from './components/ConversationPanel.vue'
 import ConfigPanel from './components/ConfigPanel.vue'
+import ServiceLogPanel from './components/ServiceLogPanel.vue'
 
 const { connected, tick, fps, tree, blackboard, conversation, metrics } = useWebSocket()
 
 const activeTab = ref('bb')
 
+const SIDEBAR_MIN = 240
+const SIDEBAR_MAX = 640
+const SIDEBAR_DEFAULT = 360
+
+const sidebarSide = ref(
+  localStorage.getItem('monitor_sidebar_side') === 'left' ? 'left' : 'right',
+)
+const storedW = Number(localStorage.getItem('monitor_sidebar_width'))
+const sidebarWidth = ref(
+  Number.isFinite(storedW) && storedW >= SIDEBAR_MIN && storedW <= SIDEBAR_MAX
+    ? storedW
+    : SIDEBAR_DEFAULT,
+)
+const isResizing = ref(false)
+
+function clampSidebarWidth(w) {
+  return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w))
+}
+
+function toggleSidebarSide() {
+  sidebarSide.value = sidebarSide.value === 'right' ? 'left' : 'right'
+  localStorage.setItem('monitor_sidebar_side', sidebarSide.value)
+}
+
+let resizeStartX = 0
+let resizeStartW = 0
+let onResizeMove = null
+let onResizeUp = null
+
+function endResize() {
+  isResizing.value = false
+  if (onResizeMove) window.removeEventListener('mousemove', onResizeMove)
+  if (onResizeUp) window.removeEventListener('mouseup', onResizeUp)
+  onResizeMove = null
+  onResizeUp = null
+  localStorage.setItem('monitor_sidebar_width', String(sidebarWidth.value))
+}
+
+function startResize(e) {
+  isResizing.value = true
+  resizeStartX = e.clientX
+  resizeStartW = sidebarWidth.value
+  onResizeMove = (ev) => {
+    const delta = sidebarSide.value === 'right'
+      ? resizeStartX - ev.clientX
+      : ev.clientX - resizeStartX
+    sidebarWidth.value = clampSidebarWidth(resizeStartW + delta)
+  }
+  onResizeUp = () => endResize()
+  window.addEventListener('mousemove', onResizeMove)
+  window.addEventListener('mouseup', onResizeUp)
+}
+
+onUnmounted(endResize)
+
 const TAB_LIST = computed(() => [
   { id: 'bb',     icon: '◻', label: '黑板',   badge: bbCount.value || null },
   { id: 'chat',   icon: '◎', label: '对话',   badge: conversation.value.length || null },
   { id: 'config', icon: '⚙', label: '配置',   badge: null },
+  { id: 'logs',   icon: '▤', label: '日志',   badge: null },
 ])
 
 const bbCount = computed(() =>
@@ -377,6 +454,15 @@ body {
   gap: 0;
 }
 
+.main.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.main.sidebar-left {
+  flex-direction: row-reverse;
+}
+
 /* ── Tree section ── */
 .tree-section {
   flex: 1;
@@ -429,13 +515,78 @@ body {
 
 /* ── Sidebar ── */
 .sidebar {
-  width: 320px;
-  min-width: 320px;
-  border-left: 1px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
   background: var(--surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.main.sidebar-right .sidebar {
+  border-left: 1px solid var(--border);
+}
+
+.main.sidebar-left .sidebar {
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 30;
+  cursor: col-resize;
+}
+
+.main.sidebar-right .sidebar-resizer {
+  left: 0;
+  transform: translateX(-50%);
+}
+
+.main.sidebar-left .sidebar-resizer {
+  right: 0;
+  transform: translateX(50%);
+}
+
+.sidebar-resizer:hover,
+.main.is-resizing .sidebar-resizer {
+  background: rgba(0, 200, 255, 0.15);
+}
+
+.sidebar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(11, 20, 34, 0.6);
+  flex-shrink: 0;
+}
+
+.layout-btn {
+  border: 1px solid var(--border);
+  background: var(--elevated);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.layout-btn:hover {
+  color: var(--cyan);
+  border-color: rgba(0, 200, 255, 0.35);
+}
+
+.sidebar-size {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
 }
 
 .tabs {
@@ -443,15 +594,19 @@ body {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--elevated);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .tab-btn {
-  flex: 1;
+  flex: 1 0 auto;
+  min-width: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 10px 4px;
+  gap: 4px;
+  padding: 9px 6px;
   border: none;
   background: transparent;
   color: var(--text-dim);
@@ -492,7 +647,9 @@ body {
 }
 
 .tab-label {
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .tab-badge {

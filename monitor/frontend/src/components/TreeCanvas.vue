@@ -18,12 +18,10 @@
       <!-- 可缩放/拖拽容器 -->
       <div
         class="pan-layer"
+        :class="{ dragging: isDragging }"
         @wheel.prevent="onWheel"
         @mousedown="onMouseDown"
-        @mousemove="onMouseMove"
-        @mouseup="onMouseUp"
-        @mouseleave="onMouseUp"
-        :style="{ cursor: dragging ? 'grabbing' : 'grab' }"
+        :style="{ cursor: isDragging ? 'grabbing' : 'grab' }"
       >
         <!-- 变换层 -->
         <div
@@ -52,7 +50,7 @@
               :d="edgePath(edge)"
               fill="none"
               :stroke="edgeColor(edge.status)"
-              stroke-width="1.5"
+              :stroke-width="1.5 * scale"
               stroke-opacity="0.6"
               :filter="edge.status === 'RUNNING' ? 'url(#glow-blue)' : ''"
             />
@@ -68,7 +66,12 @@
               :key="item.node.id"
               class="ncard"
               :class="item.node.status"
-              :style="{ left: item.x + 'px', top: item.y + 'px' }"
+              :style="{
+                left: item.x + 'px',
+                top: item.y + 'px',
+                width: layoutDims.nw + 'px',
+                height: layoutDims.nh + 'px',
+              }"
             >
               <div class="ncard-head">
                 <span class="status-dot" />
@@ -87,18 +90,18 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 
 const props = defineProps({
   tree: { type: Object, default: null },
 })
 
-// ── 节点卡片尺寸 & 间距 ─────────────────────────────────
-const NW = 120   // 节点宽度（紧凑以容纳更多叶节点）
-const NH = 56    // 节点高度
-const GX = 8     // 水平间距
-const GY = 72    // 垂直间距（加大，改善纵向空间感）
-const PAD = 24
+// ── 节点卡片基准尺寸（zoom=1）；缩放改布局尺寸而非 CSS scale，避免放大发糊 ──
+const NW_BASE = 132
+const NH_BASE = 58
+const GX_BASE = 10
+const GY_BASE = 72
+const PAD_BASE = 24
 
 // ── 缩放/拖拽状态 ───────────────────────────────────────
 const wrapRef = ref(null)
@@ -106,19 +109,32 @@ const scale = ref(1)
 const tx = ref(0)
 const ty = ref(0)
 
-const SCALE_MIN = 0.2
-const SCALE_MAX = 2.5
+const SCALE_MIN = 0.08
+const SCALE_MAX = 5
 const SCALE_STEP = 0.12
 
-let dragging = ref(false)
+const isDragging = ref(false)
 let dragStartX = 0
 let dragStartY = 0
 let dragStartTx = 0
 let dragStartTy = 0
+let lastStructureKey = ''
 
+const layoutDims = computed(() => {
+  const z = scale.value
+  return {
+    nw: NW_BASE * z,
+    nh: NH_BASE * z,
+    gx: GX_BASE * z,
+    gy: GY_BASE * z,
+    pad: PAD_BASE * z,
+  }
+})
+
+// 仅平移；缩放由布局尺寸承担，文字/SVG 始终以真实像素渲染
 const transformStyle = computed(() => ({
-  transform: `translate(${tx.value}px, ${ty.value}px) scale(${scale.value})`,
-  transformOrigin: '0 0',
+  transform: `translate(${tx.value}px, ${ty.value}px)`,
+  '--z': String(scale.value),
 }))
 
 function clampScale(s) {
@@ -138,27 +154,42 @@ function zoomAt(clientX, clientY, factor) {
 }
 
 function onWheel(e) {
-  const factor = e.deltaY < 0 ? (1 + SCALE_STEP) : (1 - SCALE_STEP)
+  // 滚轮/触控板：按 delta 连续缩放，Ctrl+滚轮同样生效
+  const factor = Math.exp(-e.deltaY * 0.002)
   zoomAt(e.clientX, e.clientY, factor)
 }
 
-function onMouseDown(e) {
-  if (e.button !== 0) return
-  dragging.value = true
-  dragStartX = e.clientX
-  dragStartY = e.clientY
-  dragStartTx = tx.value
-  dragStartTy = ty.value
-}
-
-function onMouseMove(e) {
-  if (!dragging.value) return
+function onDocumentMouseMove(e) {
+  if (!isDragging.value) return
   tx.value = dragStartTx + (e.clientX - dragStartX)
   ty.value = dragStartTy + (e.clientY - dragStartY)
 }
 
-function onMouseUp() {
-  dragging.value = false
+function endDrag() {
+  if (!isDragging.value) return
+  isDragging.value = false
+  window.removeEventListener('mousemove', onDocumentMouseMove)
+  window.removeEventListener('mouseup', endDrag)
+}
+
+function onMouseDown(e) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  isDragging.value = true
+  dragStartX = e.clientX
+  dragStartY = e.clientY
+  dragStartTx = tx.value
+  dragStartTy = ty.value
+  window.addEventListener('mousemove', onDocumentMouseMove)
+  window.addEventListener('mouseup', endDrag)
+}
+
+onUnmounted(endDrag)
+
+function treeStructureKey(node) {
+  if (!node) return ''
+  const kids = (node.children || []).map(treeStructureKey).join('|')
+  return `${node.id}:${kids}`
 }
 
 function zoomIn()  { zoomAt(wrapRef.value ? wrapRef.value.clientWidth/2 : 0, wrapRef.value ? wrapRef.value.clientHeight/2 : 0, 1 + SCALE_STEP * 2) }
@@ -169,33 +200,38 @@ function zoomOut() { zoomAt(wrapRef.value ? wrapRef.value.clientWidth/2 : 0, wra
 function fitToView() {
   const wrap = wrapRef.value
   if (!wrap || !layout.value.length) return
-  const cw = canvasW.value
-  const ch = canvasH.value
   const vw = wrap.clientWidth
   const vh = wrap.clientHeight
+  const z = scale.value || 1
+  const baseW = canvasW.value / z
+  const baseH = canvasH.value / z
 
-  const scaleByW = (vw * 0.92) / cw
-  const scaleByH = (vh * 0.88) / ch
-  // 优先完整显示整棵树；如果比例太小则设置最低可读缩放
+  const scaleByW = (vw * 0.92) / baseW
+  const scaleByH = (vh * 0.88) / baseH
   const fitted = Math.min(scaleByW, scaleByH)
   const newScale = clampScale(Math.max(fitted, 0.35))
 
   scale.value = newScale
-  // 水平居中（超出视口时从左边开始，用户可横向拖拽）
-  tx.value = Math.max(16, (vw - cw * newScale) / 2)
-  // 垂直居中（树比视口矮时居中，否则从顶部留边距）
-  ty.value = Math.max(20, (vh - ch * newScale) / 2)
+  tx.value = Math.max(16, (vw - baseW * newScale) / 2)
+  ty.value = Math.max(20, (vh - baseH * newScale) / 2)
 }
 
 function resetView() {
   fitToView()
 }
 
-// 树变化时自动适配视图
-watch(() => props.tree, async (newTree) => {
-  if (!newTree) return
-  await nextTick()
-  fitToView()
+// 仅在首次加载或树拓扑变化时自动适配，避免 tick 状态刷新重置用户缩放/平移
+watch(() => props.tree, async (newTree, oldTree) => {
+  if (!newTree) {
+    lastStructureKey = ''
+    return
+  }
+  const key = treeStructureKey(newTree)
+  if (!oldTree || key !== lastStructureKey) {
+    lastStructureKey = key
+    await nextTick()
+    fitToView()
+  }
 }, { flush: 'post' })
 
 // ── 布局算法 ─────────────────────────────────────────────
@@ -205,24 +241,26 @@ function leafCount(node) {
   return node.children.reduce((s, c) => s + leafCount(c), 0)
 }
 
-function buildLayout(node, depth, offsetX, out) {
+function buildLayout(node, depth, offsetX, out, dims) {
+  const { nw, nh, gx, gy, pad } = dims
   const lc = leafCount(node)
-  const span = lc * (NW + GX) - GX
-  const x = offsetX + (span - NW) / 2
-  const y = PAD + depth * (NH + GY)
+  const span = lc * (nw + gx) - gx
+  const x = offsetX + (span - nw) / 2
+  const y = pad + depth * (nh + gy)
   const item = { node, x, y }
   out.push(item)
   if (node.children?.length) {
     let cx = offsetX
     for (const child of node.children) {
-      buildLayout(child, depth + 1, cx, out)
-      cx += leafCount(child) * (NW + GX)
+      buildLayout(child, depth + 1, cx, out, dims)
+      cx += leafCount(child) * (nw + gx)
     }
   }
   return item
 }
 
-function buildEdges(root, layoutMap) {
+function buildEdges(root, layoutMap, dims) {
+  const { nw, nh } = dims
   const result = []
   function walk(node) {
     if (!node.children) return
@@ -231,8 +269,8 @@ function buildEdges(root, layoutMap) {
       const c = layoutMap[child.id]
       if (p && c) {
         result.push({
-          x1: p.x + NW / 2, y1: p.y + NH,
-          x2: c.x + NW / 2, y2: c.y,
+          x1: p.x + nw / 2, y1: p.y + nh,
+          x2: c.x + nw / 2, y2: c.y,
           status: node.status,
         })
       }
@@ -247,8 +285,9 @@ function buildEdges(root, layoutMap) {
 
 const layout = computed(() => {
   if (!props.tree) return []
+  const dims = layoutDims.value
   const out = []
-  buildLayout(props.tree, 0, PAD, out)
+  buildLayout(props.tree, 0, dims.pad, out, dims)
   return out
 })
 
@@ -260,17 +299,19 @@ const layoutMap = computed(() => {
 
 const edges = computed(() => {
   if (!props.tree) return []
-  return buildEdges(props.tree, layoutMap.value)
+  return buildEdges(props.tree, layoutMap.value, layoutDims.value)
 })
 
 const canvasW = computed(() => {
   if (!layout.value.length) return 600
-  return Math.max(...layout.value.map(i => i.x)) + NW + PAD * 2
+  const { nw, pad } = layoutDims.value
+  return Math.max(...layout.value.map(i => i.x)) + nw + pad * 2
 })
 
 const canvasH = computed(() => {
   if (!layout.value.length) return 400
-  return Math.max(...layout.value.map(i => i.y)) + NH + PAD * 2
+  const { nh, pad } = layoutDims.value
+  return Math.max(...layout.value.map(i => i.y)) + nh + pad * 2
 })
 
 // ── 辅助函数 ─────────────────────────────────────────────
@@ -287,8 +328,7 @@ function edgeColor(status) {
 }
 
 function edgePath(edge) {
-  // 贝塞尔曲线控制点：纵向偏移量基于 GY
-  const cpOffset = GY * 0.5
+  const cpOffset = layoutDims.value.gy * 0.5
   return `M${edge.x1},${edge.y1} C${edge.x1},${edge.y1 + cpOffset} ${edge.x2},${edge.y2 - cpOffset} ${edge.x2},${edge.y2}`
 }
 </script>
@@ -377,9 +417,14 @@ function edgePath(edge) {
   height: 100%;
   overflow: hidden;
   position: relative;
+  touch-action: none;
 }
 
-/* ── 变换层（scale + translate 在此应用）── */
+.pan-layer.dragging .ncard {
+  pointer-events: none;
+}
+
+/* ── 变换层（仅平移；缩放由 --z 驱动真实布局尺寸）── */
 .transform-layer {
   position: absolute;
   top: 0;
@@ -404,11 +449,10 @@ function edgePath(edge) {
 /* ── 节点卡片 ── */
 .ncard {
   position: absolute;
-  width: v-bind('NW + "px"');
-  height: v-bind('NH + "px"');
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  padding: 7px 10px;
+  box-sizing: border-box;
+  border-radius: calc(8px * var(--z, 1));
+  border: calc(1px * var(--z, 1)) solid var(--border);
+  padding: calc(7px * var(--z, 1)) calc(10px * var(--z, 1));
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -448,12 +492,12 @@ function edgePath(edge) {
 .ncard-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--z, 1));
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: calc(7px * var(--z, 1));
+  height: calc(7px * var(--z, 1));
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--text-dim);
@@ -474,7 +518,7 @@ function edgePath(edge) {
 }
 
 .ncard-name {
-  font-size: 12px;
+  font-size: calc(12px * var(--z, 1));
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--text);
@@ -491,22 +535,22 @@ function edgePath(edge) {
 }
 
 .ncard-type {
-  font-size: 10px;
+  font-size: calc(10px * var(--z, 1));
   color: var(--text-dim);
   font-family: var(--font-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
+  max-width: calc(88px * var(--z, 1));
 }
 
 .ncard-badge {
-  font-size: 9px;
+  font-size: calc(9px * var(--z, 1));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 2px 5px;
-  border-radius: 3px;
+  padding: calc(2px * var(--z, 1)) calc(5px * var(--z, 1));
+  border-radius: calc(3px * var(--z, 1));
   font-family: var(--font-mono);
   flex-shrink: 0;
 }

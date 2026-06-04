@@ -8,7 +8,7 @@
 # --- 模型路径 ---
 # 相对路径以项目根目录为基准；换模型只需修改这里
 asr_model_dir: model/voice_models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20
-kws_model_dir: model/voice_models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
+kws_model_dir: model/voice_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
 tts_model_dir: model/voice_models/vits-zh-hf-fanchen-C
 vad_model_path: model/voice_models/silero_vad.onnx
 
@@ -16,7 +16,7 @@ vad_model_path: model/voice_models/silero_vad.onnx
 wake_mode: software
 
 # --- 唤醒词 (KWS) ---
-kws_keywords_file: model/voice_models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/keywords.txt
+kws_keywords_file: model/voice_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/keywords.txt
 kws_keywords_score: 1.0
 kws_keywords_threshold: 0.25
 kws_num_trailing_blanks: 1
@@ -80,7 +80,7 @@ output_device_hint: C-Media
 
 # --- 对话 ---
 dialog_timeout: 15.0  # 秒，无活动后超时回到 idle
-continuous_dialog: true  # false: 每次回复后回到唤醒；true: 唤醒后连续对话
+continuous_dialog: false  # false: 每次回复后回到唤醒；true: 唤醒后连续对话
 interrupt_min_speech_seconds: 0.6  # TTS 启动后延迟启用打断
 
 # --- 相机 ---
@@ -153,7 +153,7 @@ right_gripper:
 # --- LLM ---
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"
 llm_provider: openai
-llm_model: mimo-v2.5-pro
+llm_model: mimo-v2.5
 llm_base_url: https://api.xiaomimimo.com/v1
 llm_max_history: 10
 llm_request_timeout: 30.0
@@ -168,7 +168,7 @@ llm_system_prompt: |
 # --- VLM (视觉语言模型) ---
 # provider: "ollama" | "openai" | "deepseek" | "anthropic"
 vlm_provider: openai
-vlm_model: mimo-v2-omni
+vlm_model: mimo-v2.5
 vlm_base_url: https://api.xiaomimimo.com/v1/
 vlm_system_prompt: |
   你是一个机器人的视觉系统。根据图片内容，用中文描述你看到的场景。
@@ -191,13 +191,13 @@ intent_patterns:
   # back_to_origin: [回到坐标原点, 回到原点, 回原点]
   # arc_welding: [执行弧焊作业, 开始弧焊, 进行弧焊]
   # workbench_status_check: [开启工作台，检查运行状态, 开启工作台检查运行状态, 启动工作台检查运行状态]
-  describe_left_palm: [用左手摄像头, 左爪, 左夹爪, 左掌心, 左手拿, 看看左]
-  describe_right_palm: [用右手摄像头, 右爪, 右夹爪, 右掌心, 右手拿, 看看右]
+  describe_left_palm: [左手摄像头, 用你的左手摄像头, 左爪, 左夹爪, 左掌心, 左手拿, 看看左]
+  describe_right_palm: [右手摄像头, 用你的右手摄像头, 右爪, 右夹爪, 右掌心, 右手拿, 看看右]
   describe_scene: [看一下, 看看, 这是什么, 前面有什么, 描述一下, 看到了什么]
   take_photo: [拍照, 拍张照, 拍个照, 拍一张, 照片]
   record_video: [录像, 录制视频, 录视频, 录一段, 摄像, 拍个视频, 拍视频]
   gripper_control: [左手张开, 右手张开, 左手握, 右手握, 动动左手, 动动右手, 左手, 右手, 夹爪]
-  robot_arm: [机械臂, 抓取, 拿起, 放下, 进入拖动, 开始拖动, 开启拖动, 退出拖动, 结束拖动, 停止拖动, 拖动动作, 动作组, 回放轨迹, 挥手, 打招呼, 你好, 握手]
+  robot_arm: [机械臂, 抓取, 拿起, 放下, 进入拖动, 开始拖动, 开启拖动, 退出拖动, 结束拖动, 停止拖动, 拖动动作, 动作组, 回放轨迹, 挥手, 打招呼, 你好, 握手, 敬礼, 敬个礼]
   introduce_self: [介绍一下你自己, 介绍一下机器人, 介绍一下自己, 你是谁, 你能做什么]
   introduce_krt: [介绍一下湖南科瑞特, 介绍湖南科瑞特]
   navigation: [导航, 前往, 去, 带我去]
@@ -259,6 +259,11 @@ robot_arm_keyword_actions:
     group_name: 握手
     response_text: 你好，很高兴见到你。
     priority: 100
+  - keywords: [敬礼, 敬个礼]
+    arm_side: right
+    group_name: 敬礼
+    response_text: ""
+    priority: 100
 
 # --- TTS 响应模板 ---
 tts_responses:
@@ -268,7 +273,7 @@ tts_responses:
   arc_welding: 正在执行弧焊作业，请注意安全。
   workbench_status_check: 好的，正在启动工作台，检查运行状态。
   gripper_missing_side: 请说明左手还是右手。
-  introduce_self: 我是湖南科瑞特科技的机器人小特，我可以通过自然语言和你对话。我支持关键词指令和大模型多指令规划，可配合相机、机械臂、导航等模块，完成拍照、录像、场景描述、机械臂控制和自然对话等任务。我有两个7轴协作机械臂，两个三指灵巧手，三个摄像头一个在我的头部，另外两个在我的手上，还有灵活的移动底盘，去哪儿都行。
+  introduce_self: 我是湖南科瑞特科技的机器人小特，我可以通过自然语言和你对话。我支持关键词指令和大模型多指令规划，可配合相机、机械臂、导航等模块，完成拍照、录像、场景描述、机械臂控制和自然对话等任务。我有两个7轴协作机械臂，两个三指灵巧手，三个摄像头一个在我的头部，另外两个在我的手上，还有灵活的移动底盘搭配3D激光雷达建图，去哪儿都行。
   introduce_krt: 湖南科瑞特科技有限公司创立于2004年，是一家以人工智能技术、机器人技术、物联网技术等先进技术为核心，集产品研究开发、生产制造、市场营销、工程服务及技术培训为一体，为工业企业、科研院所、高校与职校等在人工智能及应用、智能机器人、工业机器人与智能制造、集成电路设计制造与封测、电子工艺与制造、无人机及应用等泛人工智能领域提供整体解决方案的专业提供商。公司为国家级高新技术企业、信息化建设重点试点企业、智能制造示范企业、省级专精特新小巨人企业；公司已通过ISO9001国际质量管理体系认证、ISO14001国际环境管理体系认证、ISO45001职业健康安全管理体系认证、GB/T 23001与GB/T 23006两化融合管理体系认证；在科技创新方面，公司先后获得80多项专利与软件著作权等自主知识产权，30多个科技项目获得部级、省市级重大、重点项目认定。公司在全国共设立15个办事处，拥有150家以上合作伙伴、1400家以上终端客户，经营与服务网络覆盖全国各省市。
 interrupt_wakeup_responses:
   - 我在，请说。

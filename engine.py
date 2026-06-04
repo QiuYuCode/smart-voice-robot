@@ -35,6 +35,23 @@ from config import (
 )
 
 
+def _pick_kws_onnx(model_dir: str, role: str) -> str:
+    """在 KWS 模型目录中选取 chunk-16 的 fp32 onnx（兼容不同 epoch 命名）。"""
+    d = Path(model_dir)
+    candidates = sorted(
+        p
+        for p in d.glob(f"{role}-*.onnx")
+        if "int8" not in p.name and "chunk-16" in p.name
+    )
+    if not candidates:
+        candidates = sorted(
+            p for p in d.glob(f"{role}-*.onnx") if "int8" not in p.name
+        )
+    if not candidates:
+        raise FileNotFoundError(f"KWS 模型目录缺少 {role} onnx: {model_dir}")
+    return str(candidates[0])
+
+
 class VoiceEngine:
     """语音引擎：管理所有语音模型和音频流"""
 
@@ -54,11 +71,12 @@ class VoiceEngine:
         # 1. 唤醒检测（软件唤醒）
         self.kws = None
 
+        kws_dir = config.kws_model_dir
         self.kws = sherpa_onnx.KeywordSpotter(
-            tokens=f"{config.kws_model_dir}/tokens.txt",
-            encoder=f"{config.kws_model_dir}/encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-            decoder=f"{config.kws_model_dir}/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-            joiner=f"{config.kws_model_dir}/joiner-epoch-12-avg-2-chunk-16-left-64.onnx",
+            tokens=f"{kws_dir}/tokens.txt",
+            encoder=_pick_kws_onnx(kws_dir, "encoder"),
+            decoder=_pick_kws_onnx(kws_dir, "decoder"),
+            joiner=_pick_kws_onnx(kws_dir, "joiner"),
             keywords_file=config.kws_keywords_file,
             keywords_score=config.kws_keywords_score,
             keywords_threshold=config.kws_keywords_threshold,

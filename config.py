@@ -46,7 +46,7 @@ if not MODELS_BASE.exists():
 ASR_DIR = MODELS_BASE / "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
 
 # sherpa-onnx 关键词检测
-KWS_DIR = MODELS_BASE / "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
+KWS_DIR = MODELS_BASE / "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20"
 
 # sherpa-onnx VITS TTS
 TTS_DIR = MODELS_BASE / "vits-zh-hf-fanchen-C"

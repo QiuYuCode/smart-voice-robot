@@ -558,7 +558,7 @@ smart-voice-robot/
 | 模型 | 用途 | 文件/目录名 |
 |------|------|--------|
 | zipformer-bilingual-zh-en | 流式 ASR (中英双语) | `sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/` |
-| kws-zipformer-wenetspeech | 关键词检测 (KWS) | `sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/` |
+| kws-zipformer-zh-en | 关键词检测 (KWS，中英) | `sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/` |
 | VITS fanchen-C | TTS 语音合成（单说话人，音质较好，**推荐**）| `vits-zh-hf-fanchen-C/` |
 | VITS aishell3 | TTS 语音合成（备选，174 音色）| `vits-zh-aishell3/` |
 | Silero VAD | 语音活动检测 (静默超时) | `silero_vad.onnx` |
@@ -696,13 +696,13 @@ uv sync
 ```yaml
 # --- 模型路径 ---
 asr_model_dir: model/voice_models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20
-kws_model_dir: model/voice_models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
+kws_model_dir: model/voice_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
 tts_model_dir: model/voice_models/vits-zh-hf-fanchen-C
 vad_model_path: model/voice_models/silero_vad.onnx
 
 # --- 唤醒词 (KWS) ---
-kws_keywords_file: model/voice_models/.../keywords.txt
-kws_keywords_threshold: 0.25
+kws_keywords_file: model/voice_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/keywords.txt
+kws_keywords_threshold: 0.12   # 官方默认 0.25，可按误唤醒/漏唤醒微调
 
 # --- ASR 后端 ---
 asr_backend: local          # "local" | "iflytek_cloud"
@@ -754,6 +754,81 @@ intent_patterns:
 onnx_provider: cpu          # "cuda" | "cpu"
 num_threads: 2
 ```
+
+### 自定义唤醒词
+
+当前默认 KWS 模型为 [sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20](https://k2-fsa.github.io/sherpa/onnx/kws/pretrained_models/index.html#sherpa-onnx-kws-zipformer-zh-en-3m-2025-12-20-chinese-english)（中英双语）。**不能直接手写 `keywords.txt`**：须先用 `text2token` 把中文唤醒词转成模型所需的音素/拼音 token 行，再在 `config.yaml` 中指向生成的文件。
+
+#### 1. 下载 KWS 模型（若尚未下载）
+
+```bash
+cd model/voice_models
+wget https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2
+tar -xjf sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2
+```
+
+`config.yaml` 中 `kws_model_dir` 指向解压后的目录即可；`engine.py` 会自动选用该目录下 `chunk-16` 的 fp32 `encoder/decoder/joiner` onnx。
+
+#### 2. 编写原始唤醒词 `keywords_raw.txt`
+
+在模型目录（与 `tokens.txt`、`en.phone` 同级）新建或编辑 `keywords_raw.txt`，**每行一个唤醒词**，格式为：
+
+```text
+显示名 @原始词
+```
+
+规则（与官方文档一致）：
+
+- 必须包含 `@原始词`；运行时识别结果以 `@` 后内容为准。
+- `@` 后的原始词**不能含空格**；若短语含空格，用下划线 `_` 代替（仅英文场景常见）。
+- 中文示例：
+
+```text
+你好小特 @你好小特
+小特小特 @小特小特
+小特同学 @小特同学
+```
+
+仓库内已有一份示例：`model/voice_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/keywords_raw.txt`。
+
+#### 3. 生成 `keywords.txt`
+
+在项目根目录、已 `uv sync` 的虚拟环境中执行（`text2token` 依赖 `sentencepiece`、`pypinyin`，若命令报错可先 `uv pip install sentencepiece pypinyin`）：
+
+```bash
+cd model/voice_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+
+uv run sherpa-onnx-cli text2token \
+  --tokens tokens.txt \
+  --tokens-type phone+ppinyin \
+  --lexicon en.phone \
+  keywords_raw.txt keywords.txt
+```
+
+生成后的 `keywords.txt` 每行类似：
+
+```text
+n ǐ h ǎo x iǎo t è @你好小特
+x iǎo t è x iǎo t è @小特小特
+```
+
+#### 4. 更新配置并重启
+
+```yaml
+# config.yaml
+kws_keywords_file: model/voice_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/keywords.txt
+kws_keywords_threshold: 0.12   # 难唤醒可略降，误唤醒多可略升（官方默认 0.25）
+```
+
+修改后重启 `main.py` 或 systemd 服务。仅改唤醒词、不换模型时，**不必**改 `kws_model_dir`。
+
+#### 5. 验证
+
+重启服务后对着麦克风说 `@` 后的原始词（如「你好小特」），日志中应出现 `唤醒成功! 关键词: ...`。
+
+若需离线 wav 测试，见 [官方 keyword-spotter 示例](https://k2-fsa.github.io/sherpa/onnx/kws/pretrained_models/index.html#test-the-model)（需 sherpa-onnx 可执行文件 `sherpa-onnx-keyword-spotter`）；模型包内 `test_wavs/` 与 `test_wavs/keywords.txt` 可作对照。
+
+> **换用旧版纯中文模型**（`sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01`）时，token 类型不同，需改用 `--tokens-type ppinyin` 生成关键词，且须同步修改 `kws_model_dir` 与 `engine` 所用 onnx 路径。当前项目默认已切换为 zh-en 模型。
 
 ---
 

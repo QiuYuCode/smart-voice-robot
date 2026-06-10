@@ -223,17 +223,20 @@ class RobotConfig:
     gripper_inter_finger_delay: float = 0.04
     gripper_post_reset_sleep: float = 0.45
     gripper_exec_delay_ms: int = 10
+    gripper_auto_detect_device_id: bool = True
     gripper_set_safe_current: bool = True
     gripper_safe_current: int = 250
 
     left_gripper: dict[str, Any] = field(default_factory=lambda: {
         "adapter_index": 0,
+        "channel": 0,
         "device_id": 0x01,
         "has_pressure_sensor": False,
     })
     right_gripper: dict[str, Any] = field(default_factory=lambda: {
         "adapter_index": 1,
-        "device_id": 0x02,
+        "channel": 0,
+        "device_id": 0x01,
         "has_pressure_sensor": True,
     })
 
